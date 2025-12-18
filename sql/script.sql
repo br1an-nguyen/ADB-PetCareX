@@ -251,6 +251,7 @@ GO
 
 
 
+
 -- 3. FUNCTIONS
 CREATE FUNCTION TaoIDPhieuKham() RETURNS char(10) AS
 BEGIN
@@ -311,6 +312,14 @@ BEGIN
 	DECLARE @ID_MoiNhat char(10) = (SELECT MAX(ID_SanPham) FROM SanPham);
 	IF @ID_MoiNhat IS NULL RETURN 'SP00000001';
 	RETURN 'SP' + FORMAT(CAST(RIGHT(@ID_MoiNhat, 8) AS INT) + 1, 'D8');
+END;
+GO
+
+CREATE FUNCTION TaoIDNhanVien() RETURNS char(10) AS
+BEGIN
+	DECLARE @ID_MoiNhat char(10) = (SELECT MAX(ID_NhanVien) FROM NhanVien);
+	IF @ID_MoiNhat IS NULL RETURN 'NV00000001';
+	RETURN 'NV' + FORMAT(CAST(RIGHT(@ID_MoiNhat, 8) AS INT) + 1, 'D8');
 END;
 GO
 
@@ -785,13 +794,17 @@ BEGIN
 END;
 GO
 
-CREATE PROCEDURE sp_TinhLaiTongTien
+CREATE OR ALTER PROCEDURE sp_TinhLaiTongTien
     @ID_HoaDon CHAR(10)
 AS
 BEGIN
     SET NOCOUNT ON;
     
     DECLARE @TongTienMoi FLOAT = 0;
+	DECLARE @KhuyenMaiHoaDon FLOAT = 0;
+
+	-- Lấy khuyến mãi của hóa đơn
+    SELECT @KhuyenMaiHoaDon = ISNULL(KhuyenMai, 0) FROM HoaDon WHERE ID_HoaDon = @ID_HoaDon;
 
     SELECT @TongTienMoi = ISNULL(SUM(ThanhTien), 0)
     FROM (
@@ -803,7 +816,7 @@ BEGIN
 
         UNION ALL
 
-        SELECT CD.Gia_DichVu AS ThanhTien
+        SELECT CD.Gia_DichVu * (1.0 - ISNULL(TP.KhuyenMai, 0)/100.0) AS ThanhTien
         FROM DichVu_TiemPhong TP
         JOIN ChiNhanh_DichVu CD ON TP.ID_DichVu = CD.ID_DichVuDuocDung
         WHERE TP.ID_HoaDon = @ID_HoaDon
@@ -817,7 +830,7 @@ BEGIN
     ) AS TongHopChiPhi;
 
     UPDATE HoaDon 
-    SET TongTien = @TongTienMoi 
+    SET TongTien = CASE WHEN (@TongTienMoi - @KhuyenMaiHoaDon) < 0 THEN 0 ELSE (@TongTienMoi - @KhuyenMaiHoaDon) END
     WHERE ID_HoaDon = @ID_HoaDon;
 
 END;
@@ -926,6 +939,572 @@ BEGIN
 END;
 GO
 
+CREATE PROCEDURE sp_BaoCaoDoanhThu
+    @LoaiBaoCao VARCHAR(10),
+    @NgayInput DATE = NULL,
+    @Thang INT = NULL, 
+    @Quy INT = NULL,
+    @Nam INT = NULL,
+    @ID_ChiNhanh CHAR(10) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @LoaiBaoCao IN ('THANG', 'QUY', 'NAM') AND @Nam IS NULL
+    BEGIN
+        RAISERROR(N'Vui lòng nhập Năm cần xem báo cáo.', 16, 1);
+        RETURN;
+    END;
+
+    SELECT 
+        CN.ID_ChiNhanh,
+        CN.Ten_ChiNhanh,
+        COUNT(HD.ID_HoaDon) AS SoLuongDonHang,
+        ISNULL(SUM(HD.TongTien), 0) AS TongDoanhThu
+    FROM HoaDon HD
+    JOIN NhanVien NV ON HD.ID_NhanVien = NV.ID_NhanVien
+    JOIN ChiNhanh CN ON NV.ID_ChiNhanh = CN.ID_ChiNhanh
+    WHERE 
+        (@ID_ChiNhanh IS NULL OR CN.ID_ChiNhanh = @ID_ChiNhanh)
+        
+        AND (
+            (@LoaiBaoCao = 'NGAY' AND CAST(HD.NgayLap AS DATE) = @NgayInput)
+            
+            OR
+            (@LoaiBaoCao = 'THANG' AND MONTH(HD.NgayLap) = @Thang AND YEAR(HD.NgayLap) = @Nam)
+            
+            OR
+            (@LoaiBaoCao = 'QUY' AND DATEPART(QUARTER, HD.NgayLap) = @Quy AND YEAR(HD.NgayLap) = @Nam)
+            
+            OR
+            (@LoaiBaoCao = 'NAM' AND YEAR(HD.NgayLap) = @Nam)
+        )
+    GROUP BY CN.ID_ChiNhanh, CN.Ten_ChiNhanh
+    ORDER BY TongDoanhThu DESC;
+END;
+GO
+
+CREATE PROCEDURE sp_DanhSachTiemPhongTrongKy
+    @LoaiBaoCao VARCHAR(10),
+    @NgayInput DATE = NULL,
+    @Thang INT = NULL,
+    @Quy INT = NULL,
+    @Nam INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @LoaiBaoCao IN ('THANG', 'QUY', 'NAM') AND @Nam IS NULL
+    BEGIN
+        RAISERROR(N'Vui lòng nhập Năm cần xem danh sách.', 16, 1);
+        RETURN;
+    END;
+
+    SELECT 
+        TP.NgayTiem,
+        KH.HoTen AS ChuNhan,
+        KH.Phone AS SDT,
+        TC.TenThuCung,
+        (L.TenLoai + N' - ' + G.TenGiong) AS GiongLoai,
+        VX.Ten_LoaiVacxin,
+        TP.LieuLuong,
+        CASE 
+            WHEN TP.GoiTiem IS NULL THEN N'Tiêm lẻ'
+            ELSE N'Gói ' + CAST(TP.GoiTiem AS NVARCHAR(10)) + N' mũi'
+        END AS HinhThucTiem,
+        NV.HoTen AS NguoiTiem
+    FROM DichVu_TiemPhong TP
+    JOIN ThuCung TC ON TP.ID_ThuCung = TC.ID_ThuCung
+    JOIN TaiKhoanThanhVien KH ON TC.ID_TaiKhoan = KH.ID_TaiKhoan
+    JOIN Giong G ON TC.ID_Giong = G.ID_Giong
+    JOIN Loai L ON G.ID_Loai = L.ID_Loai
+    JOIN Loai_Vacxin VX ON TP.ID_LoaiVacxin = VX.ID_LoaiVacxin
+    JOIN NhanVien NV ON TP.ID_NhanVien = NV.ID_NhanVien
+    WHERE 
+        (
+            (@LoaiBaoCao = 'NGAY' AND TP.NgayTiem = @NgayInput)
+            
+            OR
+            (@LoaiBaoCao = 'THANG' AND MONTH(TP.NgayTiem) = @Thang AND YEAR(TP.NgayTiem) = @Nam)
+            
+            OR
+            (@LoaiBaoCao = 'QUY' AND DATEPART(QUARTER, TP.NgayTiem) = @Quy AND YEAR(TP.NgayTiem) = @Nam)
+            
+            OR
+            (@LoaiBaoCao = 'NAM' AND YEAR(TP.NgayTiem) = @Nam)
+        )
+    ORDER BY TP.NgayTiem DESC;
+END;
+GO
+
+CREATE PROCEDURE sp_ThongKeVacxinHot
+    @LoaiBaoCao VARCHAR(10),
+    @NgayInput DATE = NULL,
+    @Thang INT = NULL,
+    @Quy INT = NULL,
+    @Nam INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @LoaiBaoCao IN ('THANG', 'QUY', 'NAM') AND @Nam IS NULL
+    BEGIN
+        RAISERROR(N'Vui lòng nhập Năm cần xem thống kê.', 16, 1);
+        RETURN;
+    END;
+
+    SELECT 
+        VX.ID_LoaiVacxin,
+        VX.Ten_LoaiVacxin,
+        COUNT(TP.ID_LoaiVacxin) AS SoLuongMuiTiem,
+        FORMAT(CAST(COUNT(TP.ID_LoaiVacxin) * 100.0 / (SUM(COUNT(TP.ID_LoaiVacxin)) OVER()) AS decimal(5,2)), 'N2') + '%' AS TiLePhanTram
+    FROM DichVu_TiemPhong TP
+    JOIN Loai_Vacxin VX ON TP.ID_LoaiVacxin = VX.ID_LoaiVacxin
+    WHERE 
+        (
+            (@LoaiBaoCao = 'NGAY' AND TP.NgayTiem = @NgayInput)
+            OR
+            (@LoaiBaoCao = 'THANG' AND MONTH(TP.NgayTiem) = @Thang AND YEAR(TP.NgayTiem) = @Nam)
+            OR
+            (@LoaiBaoCao = 'QUY' AND DATEPART(QUARTER, TP.NgayTiem) = @Quy AND YEAR(TP.NgayTiem) = @Nam)
+            OR
+            (@LoaiBaoCao = 'NAM' AND YEAR(TP.NgayTiem) = @Nam)
+        )
+    GROUP BY VX.ID_LoaiVacxin, VX.Ten_LoaiVacxin
+    ORDER BY SoLuongMuiTiem DESC;
+END;
+GO
+
+CREATE PROCEDURE sp_BaoCaoTonKhoVaSucBan
+    @LoaiBaoCao VARCHAR(10),
+    @NgayInput DATE = NULL,
+    @Thang INT = NULL,
+    @Quy INT = NULL,
+    @Nam INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @LoaiBaoCao IN ('THANG', 'QUY', 'NAM') AND @Nam IS NULL
+    BEGIN
+        RAISERROR(N'Vui lòng nhập Năm cần xem báo cáo.', 16, 1);
+        RETURN;
+    END;
+
+    -- Sử dụng LEFT JOIN để liệt kê cả những sản phẩm KHÔNG bán được (để biết đường mà xả hàng)
+    SELECT 
+        SP.ID_SanPham,
+        SP.TenSanPham,
+        LSP.TenLoaiSP,
+        SP.GiaBan,
+        
+        -- Cột 1: Tồn kho thực tế ngay lúc này
+        SP.SoLuongTonKho AS TonKhoHienTai,
+
+        -- Cột 2: Số lượng bán ra trong kỳ đã chọn
+        ISNULL(SUM(CASE 
+            WHEN 
+                (@LoaiBaoCao = 'NGAY' AND HD.NgayLap = @NgayInput) OR
+                (@LoaiBaoCao = 'THANG' AND MONTH(HD.NgayLap) = @Thang AND YEAR(HD.NgayLap) = @Nam) OR
+                (@LoaiBaoCao = 'QUY' AND DATEPART(QUARTER, HD.NgayLap) = @Quy AND YEAR(HD.NgayLap) = @Nam) OR
+                (@LoaiBaoCao = 'NAM' AND YEAR(HD.NgayLap) = @Nam)
+            THEN MH.SoLuong 
+            ELSE 0 
+        END), 0) AS DaBanTrongKy,
+
+        ISNULL(SUM(CASE 
+            WHEN 
+                (@LoaiBaoCao = 'NGAY' AND HD.NgayLap = @NgayInput) OR
+                (@LoaiBaoCao = 'THANG' AND MONTH(HD.NgayLap) = @Thang AND YEAR(HD.NgayLap) = @Nam) OR
+                (@LoaiBaoCao = 'QUY' AND DATEPART(QUARTER, HD.NgayLap) = @Quy AND YEAR(HD.NgayLap) = @Nam) OR
+                (@LoaiBaoCao = 'NAM' AND YEAR(HD.NgayLap) = @Nam)
+            THEN MH.SoLuong * SP.GiaBan
+            ELSE 0 
+        END), 0) AS DoanhThuSanPham
+
+    FROM SanPham SP
+    JOIN Loai_SanPham LSP ON SP.ID_LoaiSP = LSP.ID_LoaiSP
+    LEFT JOIN DichVu_MuaHang MH ON SP.ID_SanPham = MH.ID_SanPham
+    LEFT JOIN HoaDon HD ON MH.ID_HoaDon = HD.ID_HoaDon
+    
+    GROUP BY SP.ID_SanPham, SP.TenSanPham, LSP.TenLoaiSP, SP.GiaBan, SP.SoLuongTonKho
+    
+
+    ORDER BY DaBanTrongKy DESC;
+END;
+GO
+
+CREATE PROCEDURE sp_TraCuuHoSoBenhAn
+    @SDT_ChuNhan CHAR(10),
+    @TenThuCung NVARCHAR(50) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF NOT EXISTS (SELECT 1 FROM TaiKhoanThanhVien WHERE Phone = @SDT_ChuNhan)
+    BEGIN
+        RAISERROR(N'Số điện thoại này chưa đăng ký thành viên.', 16, 1);
+        RETURN;
+    END
+
+    DECLARE @ID_TaiKhoan CHAR(10);
+    SELECT @ID_TaiKhoan = ID_TaiKhoan FROM TaiKhoanThanhVien WHERE Phone = @SDT_ChuNhan;
+
+    -- KẾT QUẢ 1: LỊCH SỬ KHÁM BỆNH
+    SELECT 
+        TC.TenThuCung,
+        PK.NgayDangKy AS NgayKham,
+        NV.HoTen AS BacSiKham,
+        KQ.ChuanDoan,
+        CASE 
+            WHEN KQ.ID_KetQua IS NULL THEN N'Đang chờ khám'
+            ELSE N'Hoàn thành'
+        END AS TrangThai
+    FROM ThuCung TC
+    JOIN PhieuKham PK ON TC.ID_ThuCung = PK.ID_ThuCung
+    LEFT JOIN KetQuaKham KQ ON PK.ID_PhieuKham = KQ.ID_PhieuKham
+    LEFT JOIN NhanVien NV ON KQ.ID_BacSi = NV.ID_NhanVien
+    WHERE TC.ID_TaiKhoan = @ID_TaiKhoan
+      AND (@TenThuCung IS NULL OR TC.TenThuCung LIKE N'%' + @TenThuCung + N'%')
+    ORDER BY PK.NgayDangKy DESC;
+
+    -- KẾT QUẢ 2: TÌNH TRẠNG TIÊM CHỦNG MỚI NHẤT (Sửa lại logic)
+    -- Chỉ lấy mũi tiêm gần nhất của từng loại để tính ngày tái chủng
+    ;WITH MuiTiemMoiNhat AS (
+        SELECT 
+            TC.ID_ThuCung,
+            TP.ID_LoaiVacxin,
+            MAX(TP.NgayTiem) AS NgayTiemGanNhat
+        FROM DichVu_TiemPhong TP
+        JOIN ThuCung TC ON TP.ID_ThuCung = TC.ID_ThuCung
+        WHERE TC.ID_TaiKhoan = @ID_TaiKhoan
+          AND (@TenThuCung IS NULL OR TC.TenThuCung LIKE N'%' + @TenThuCung + N'%')
+        GROUP BY TC.ID_ThuCung, TP.ID_LoaiVacxin
+    )
+    SELECT 
+        TC.TenThuCung,
+        VX.Ten_LoaiVacxin,
+        MT.NgayTiemGanNhat AS MuiGanNhat,
+        
+        DATEADD(YEAR, 1, MT.NgayTiemGanNhat) AS HanTiemLai,
+
+        CASE 
+            WHEN GETDATE() > DATEADD(YEAR, 1, MT.NgayTiemGanNhat) THEN N'Đã quá hạn - Cần tiêm gấp'
+            WHEN GETDATE() > DATEADD(MONTH, 11, MT.NgayTiemGanNhat) THEN N'Sắp đến hạn'
+            ELSE N'Đã được bảo vệ'
+        END AS TrangThaiMienDich,
+
+        CASE 
+            WHEN TP_Detail.GoiTiem IS NOT NULL THEN N'Gói (Mũi ' + CAST(TP_Detail.GoiTiem AS NVARCHAR(5)) + ')'
+            ELSE N'Tiêm lẻ'
+        END AS HinhThuc
+
+    FROM MuiTiemMoiNhat MT
+    JOIN ThuCung TC ON MT.ID_ThuCung = TC.ID_ThuCung
+    JOIN Loai_Vacxin VX ON MT.ID_LoaiVacxin = VX.ID_LoaiVacxin
+    JOIN DichVu_TiemPhong TP_Detail 
+        ON MT.ID_ThuCung = TP_Detail.ID_ThuCung 
+        AND MT.ID_LoaiVacxin = TP_Detail.ID_LoaiVacxin 
+        AND MT.NgayTiemGanNhat = TP_Detail.NgayTiem
+    ORDER BY TC.TenThuCung, MT.NgayTiemGanNhat DESC;
+
+END;
+GO
+
+CREATE PROCEDURE sp_ThongKeHieuSuatNhanVien
+    @LoaiBaoCao VARCHAR(10),
+    @NgayInput DATE = NULL,
+    @Thang INT = NULL,
+    @Quy INT = NULL,
+    @Nam INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @LoaiBaoCao IN ('THANG', 'QUY', 'NAM') AND @Nam IS NULL
+    BEGIN
+        RAISERROR(N'Vui lòng nhập Năm cần xem hiệu suất.', 16, 1);
+        RETURN;
+    END;
+
+    -- Sử dụng CTE để tính toán riêng lẻ từng loại công việc
+    
+    -- 1. KPI Bán hàng (Dựa trên Hóa Đơn)
+    ;WITH KPI_BanHang AS (
+        SELECT 
+            ID_NhanVien,
+            COUNT(ID_HoaDon) AS SoDonHang,
+            SUM(TongTien) AS DoanhThuMangVe
+        FROM HoaDon
+        WHERE 
+            (@LoaiBaoCao = 'NGAY' AND CAST(NgayLap AS DATE) = @NgayInput) OR
+            (@LoaiBaoCao = 'THANG' AND MONTH(NgayLap) = @Thang AND YEAR(NgayLap) = @Nam) OR
+            (@LoaiBaoCao = 'QUY' AND DATEPART(QUARTER, NgayLap) = @Quy AND YEAR(NgayLap) = @Nam) OR
+            (@LoaiBaoCao = 'NAM' AND YEAR(NgayLap) = @Nam)
+        GROUP BY ID_NhanVien
+    ),
+
+    -- 2. KPI Khám chữa bệnh (Dựa trên Kết quả khám - Dành cho Bác sĩ)
+    KPI_KhamBenh AS (
+        SELECT 
+            KQ.ID_BacSi AS ID_NhanVien,
+            COUNT(KQ.ID_KetQua) AS SoCaKham
+        FROM KetQuaKham KQ
+        JOIN PhieuKham PK ON KQ.ID_PhieuKham = PK.ID_PhieuKham
+        WHERE 
+            (@LoaiBaoCao = 'NGAY' AND CAST(PK.NgayDangKy AS DATE) = @NgayInput) OR
+            (@LoaiBaoCao = 'THANG' AND MONTH(PK.NgayDangKy) = @Thang AND YEAR(PK.NgayDangKy) = @Nam) OR
+            (@LoaiBaoCao = 'QUY' AND DATEPART(QUARTER, PK.NgayDangKy) = @Quy AND YEAR(PK.NgayDangKy) = @Nam) OR
+            (@LoaiBaoCao = 'NAM' AND YEAR(PK.NgayDangKy) = @Nam)
+        GROUP BY KQ.ID_BacSi
+    ),
+
+    -- 3. KPI Tiêm phòng (Dựa trên Dịch vụ tiêm - Dành cho nhân viên y tế)
+    KPI_TiemPhong AS (
+        SELECT 
+            ID_NhanVien,
+            COUNT(*) AS SoMuiTiem
+        FROM DichVu_TiemPhong
+        WHERE 
+            (@LoaiBaoCao = 'NGAY' AND NgayTiem = @NgayInput) OR
+            (@LoaiBaoCao = 'THANG' AND MONTH(NgayTiem) = @Thang AND YEAR(NgayTiem) = @Nam) OR
+            (@LoaiBaoCao = 'QUY' AND DATEPART(QUARTER, NgayTiem) = @Quy AND YEAR(NgayTiem) = @Nam) OR
+            (@LoaiBaoCao = 'NAM' AND YEAR(NgayTiem) = @Nam)
+        GROUP BY ID_NhanVien
+    )
+
+    -- Tổng hợp kết quả
+    SELECT 
+        NV.ID_NhanVien,
+        NV.HoTen,
+        CV.TenChucVu,
+        CN.Ten_ChiNhanh,
+        
+        -- Số liệu Bán hàng
+        ISNULL(BH.SoDonHang, 0) AS DonHangDaLap,
+        ISNULL(BH.DoanhThuMangVe, 0) AS DoanhThuTaoRa,
+
+        -- Số liệu Chuyên môn (Khám + Tiêm)
+        ISNULL(KB.SoCaKham, 0) AS SoCaKhamBenh,
+        ISNULL(TP.SoMuiTiem, 0) AS SoMuiTiem,
+
+        -- Tổng khối lượng công việc (Đơn hàng + Khám + Tiêm)
+        (ISNULL(BH.SoDonHang, 0) + ISNULL(KB.SoCaKham, 0) + ISNULL(TP.SoMuiTiem, 0)) AS TongTacVuXuLy
+
+    FROM NhanVien NV
+    JOIN ChucVu CV ON NV.ID_ChucVu = CV.ID_ChucVu
+    JOIN ChiNhanh CN ON NV.ID_ChiNhanh = CN.ID_ChiNhanh
+    LEFT JOIN KPI_BanHang BH ON NV.ID_NhanVien = BH.ID_NhanVien
+    LEFT JOIN KPI_KhamBenh KB ON NV.ID_NhanVien = KB.ID_NhanVien
+    LEFT JOIN KPI_TiemPhong TP ON NV.ID_NhanVien = TP.ID_NhanVien
+
+    ORDER BY TongTacVuXuLy DESC;
+END;
+GO
+
+CREATE PROCEDURE sp_ThongKeKhachHang
+    @ID_ChiNhanh CHAR(10) = NULL,
+    @SoThangChuaQuayLai INT = 3
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- BƯỚC 1: CHUẨN BỊ DỮ LIỆU (Lần cuối khách ghé là ở đâu, khi nào?)
+    -- Sử dụng (CTE) để tìm giao dịch mới nhất của từng khách
+    WITH LanGheThamCuoiCung AS (
+        SELECT 
+            HD.ID_TaiKhoan,
+            KH.HoTen,
+            KH.Phone,
+            CN.ID_ChiNhanh,
+            CN.Ten_ChiNhanh,
+            HD.NgayLap,
+            -- Xếp hạng ngày lập giảm dần theo từng khách hàng
+            ROW_NUMBER() OVER(PARTITION BY HD.ID_TaiKhoan ORDER BY HD.NgayLap DESC) as Rn
+        FROM HoaDon HD
+        JOIN NhanVien NV ON HD.ID_NhanVien = NV.ID_NhanVien
+        JOIN ChiNhanh CN ON NV.ID_ChiNhanh = CN.ID_ChiNhanh
+        JOIN TaiKhoanThanhVien KH ON HD.ID_TaiKhoan = KH.ID_TaiKhoan
+    )
+
+    , DanhSachKhachHang AS (
+        SELECT * FROM LanGheThamCuoiCung WHERE Rn = 1
+    )
+
+    -- KẾT QUẢ 1: THỐNG KÊ SỐ LƯỢNG KHÁCH HÀNG THEO CHI NHÁNH
+    SELECT 
+        DS.ID_ChiNhanh,
+        DS.Ten_ChiNhanh,
+        COUNT(DS.ID_TaiKhoan) AS TongKhachHangPhuTrach,
+        
+        SUM(CASE 
+            WHEN DATEDIFF(MONTH, DS.NgayLap, GETDATE()) >= @SoThangChuaQuayLai THEN 1 
+            ELSE 0 
+        END) AS SoKhachLauChuaQuayLai,
+
+        FORMAT(CAST(SUM(CASE 
+            WHEN DATEDIFF(MONTH, DS.NgayLap, GETDATE()) >= @SoThangChuaQuayLai THEN 1.0 
+            ELSE 0.0 
+        END) / COUNT(DS.ID_TaiKhoan) AS DECIMAL(5,2)), 'P') AS TiLeRuiRo
+
+    FROM DanhSachKhachHang DS
+    WHERE (@ID_ChiNhanh IS NULL OR DS.ID_ChiNhanh = @ID_ChiNhanh)
+    GROUP BY DS.ID_ChiNhanh, DS.Ten_ChiNhanh;
+
+    -- KẾT QUẢ 2: DANH SÁCH CHI TIẾT KHÁCH HÀNG CẦN CHĂM SÓC (CHURN LIST)
+    PRINT N'--- DANH SÁCH KHÁCH HÀNG LÂU CHƯA QUAY LẠI (> ' + CAST(@SoThangChuaQuayLai AS NVARCHAR(5)) + N' THÁNG) ---';
+    
+    WITH LanGheThamCuoiCung AS (
+        SELECT 
+            HD.ID_TaiKhoan,
+            KH.HoTen,
+            KH.Phone,
+            CN.ID_ChiNhanh,
+            CN.Ten_ChiNhanh,
+            HD.NgayLap,
+            -- Xếp hạng ngày lập giảm dần theo từng khách hàng
+            ROW_NUMBER() OVER(PARTITION BY HD.ID_TaiKhoan ORDER BY HD.NgayLap DESC) as Rn
+        FROM HoaDon HD
+        JOIN NhanVien NV ON HD.ID_NhanVien = NV.ID_NhanVien
+        JOIN ChiNhanh CN ON NV.ID_ChiNhanh = CN.ID_ChiNhanh
+        JOIN TaiKhoanThanhVien KH ON HD.ID_TaiKhoan = KH.ID_TaiKhoan
+    )
+
+    , DanhSachKhachHang AS (
+        SELECT * FROM LanGheThamCuoiCung WHERE Rn = 1
+    )
+
+    SELECT 
+        DS.Ten_ChiNhanh AS ChiNhanhGanNhat,
+        DS.HoTen AS TenKhachHang,
+        DS.Phone AS SoDienThoai,
+        DS.NgayLap AS NgayGheCuoi,
+        DATEDIFF(DAY, DS.NgayLap, GETDATE()) AS SoNgayVangBong
+    FROM DanhSachKhachHang DS
+    WHERE 
+        (@ID_ChiNhanh IS NULL OR DS.ID_ChiNhanh = @ID_ChiNhanh)
+        AND DATEDIFF(MONTH, DS.NgayLap, GETDATE()) >= @SoThangChuaQuayLai
+    ORDER BY SoNgayVangBong DESC; -- Ưu tiên người bỏ đi lâu nhất lên đầu
+
+END;
+GO
+
+CREATE PROCEDURE sp_TraCuuNhanVien
+    @TuKhoa NVARCHAR(50) = NULL,
+    @ID_ChiNhanh CHAR(10) = NULL,
+    @ID_ChucVu CHAR(10) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT 
+        NV.ID_NhanVien,
+        NV.HoTen,
+        NV.NgaySinh,
+        NV.GioiTinh,
+        CN.Ten_ChiNhanh,
+        CV.TenChucVu,
+        NV.NgayVaoLam,
+        FORMAT(NV.LuongCoBan, '#,##0') AS LuongCoBan
+    FROM NhanVien NV
+    JOIN ChiNhanh CN ON NV.ID_ChiNhanh = CN.ID_ChiNhanh
+    JOIN ChucVu CV ON NV.ID_ChucVu = CV.ID_ChucVu
+    WHERE 
+        (@TuKhoa IS NULL OR NV.HoTen LIKE N'%' + @TuKhoa + N'%' OR NV.ID_NhanVien LIKE N'%' + @TuKhoa + N'%')
+        AND (@ID_ChiNhanh IS NULL OR NV.ID_ChiNhanh = @ID_ChiNhanh)
+        AND (@ID_ChucVu IS NULL OR NV.ID_ChucVu = @ID_ChucVu)
+    ORDER BY NV.ID_ChiNhanh, NV.ID_ChucVu;
+END;
+GO
+
+CREATE PROCEDURE sp_ThemNhanVien
+    @HoTen NVARCHAR(50),
+    @NgaySinh DATE,
+    @GioiTinh NCHAR(3),
+    @NgayVaoLam DATE,
+    @ID_ChucVu CHAR(10),
+    @ID_ChiNhanh CHAR(10),
+    @LuongCoBan FLOAT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF NOT EXISTS (SELECT 1 FROM ChucVu WHERE ID_ChucVu = @ID_ChucVu)
+    BEGIN
+        RAISERROR(N'Chức vụ không tồn tại.', 16, 1); RETURN;
+    END
+
+    IF NOT EXISTS (SELECT 1 FROM ChiNhanh WHERE ID_ChiNhanh = @ID_ChiNhanh)
+    BEGIN
+        RAISERROR(N'Chi nhánh không tồn tại.', 16, 1); RETURN;
+    END
+
+    IF @NgayVaoLam < @NgaySinh
+    BEGIN
+        RAISERROR(N'Ngày vào làm không hợp lý (nhỏ hơn ngày sinh).', 16, 1); RETURN;
+    END
+
+    INSERT INTO NhanVien(ID_NhanVien, HoTen, NgaySinh, GioiTinh, NgayVaoLam, ID_ChucVu, ID_ChiNhanh, LuongCoBan)
+    VALUES (dbo.TaoIDNhanVien(), @HoTen, @NgaySinh, @GioiTinh, @NgayVaoLam, @ID_ChucVu, @ID_ChiNhanh, @LuongCoBan);
+
+    PRINT N'Thêm nhân viên thành công.';
+END;
+GO
+
+CREATE PROCEDURE sp_CapNhatNhanVien
+    @ID_NhanVien CHAR(10),
+    @HoTen NVARCHAR(50) = NULL,
+    @NgaySinh DATE = NULL,
+    @GioiTinh NCHAR(3) = NULL,
+    @ID_ChucVu CHAR(10) = NULL,
+    @LuongCoBan FLOAT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF NOT EXISTS (SELECT 1 FROM NhanVien WHERE ID_NhanVien = @ID_NhanVien)
+    BEGIN
+        RAISERROR(N'Nhân viên không tồn tại.', 16, 1); RETURN;
+    END
+
+    UPDATE NhanVien
+    SET 
+        HoTen = COALESCE(@HoTen, HoTen),
+        NgaySinh = COALESCE(@NgaySinh, NgaySinh),
+        GioiTinh = COALESCE(@GioiTinh, GioiTinh),
+        ID_ChucVu = COALESCE(@ID_ChucVu, ID_ChucVu),
+        LuongCoBan = COALESCE(@LuongCoBan, LuongCoBan)
+    WHERE ID_NhanVien = @ID_NhanVien;
+
+    PRINT N'Cập nhật thông tin thành công.';
+END;
+GO
+
+CREATE PROCEDURE sp_XoaNhanVien
+    @ID_NhanVien CHAR(10)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF NOT EXISTS (SELECT 1 FROM NhanVien WHERE ID_NhanVien = @ID_NhanVien)
+    BEGIN
+        RAISERROR(N'Nhân viên không tồn tại.', 16, 1); RETURN;
+    END
+
+    -- Kiểm tra ràng buộc dữ liệu (Đã từng làm việc gì chưa?)
+    IF EXISTS (SELECT 1 FROM HoaDon WHERE ID_NhanVien = @ID_NhanVien)
+    OR EXISTS (SELECT 1 FROM KetQuaKham WHERE ID_BacSi = @ID_NhanVien)
+    OR EXISTS (SELECT 1 FROM DichVu_TiemPhong WHERE ID_NhanVien = @ID_NhanVien)
+    BEGIN
+        RAISERROR(N'Không thể xóa: Nhân viên này đã có dữ liệu lịch sử làm việc (Hóa đơn/Khám/Tiêm).', 16, 1);
+        RETURN;
+    END
+
+    DELETE FROM NhanVien WHERE ID_NhanVien = @ID_NhanVien;
+    
+    PRINT N'Đã xóa hồ sơ nhân viên thành công.';
+END;
+GO
 
 -- 5. TRIGGERS
 CREATE TRIGGER trg_CapNhanKhuyenMai_GoiTiem
@@ -1122,3 +1701,5 @@ BEGIN
     END
 END;
 GO
+
+
