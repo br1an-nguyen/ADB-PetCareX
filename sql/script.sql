@@ -195,6 +195,25 @@ CREATE TABLE DichVu_MuaHang (
 )
 GO
 
+-- CÀI ĐẶT INDEX
+CREATE NONCLUSTERED INDEX IX_TaiKhoan_Phone ON TaiKhoanThanhVien(Phone);
+
+CREATE NONCLUSTERED INDEX IX_HoaDon_ID_NhanVien ON dbo.HoaDon(ID_NhanVien);
+CREATE NONCLUSTERED INDEX IX_HoaDon_NgayLap ON dbo.HoaDon(NgayLap);
+
+CREATE NONCLUSTERED INDEX IX_DichVu_TiemPhong_ID_ThuCung ON dbo.DichVu_TiemPhong(ID_ThuCung);
+CREATE NONCLUSTERED INDEX IX_DichVu_TiemPhong_NgayTiem ON dbo.DichVu_TiemPhong(NgayTiem);
+
+CREATE NONCLUSTERED INDEX IX_DichVu_MuaHang_SanPham ON dbo.DichVu_MuaHang(ID_SanPham);
+
+CREATE NONCLUSTERED INDEX IX_ThuCung_ID_TaiKhoan ON dbo.ThuCung(ID_TaiKhoan);
+
+CREATE NONCLUSTERED INDEX IX_PhieuKham_ID_ThuCung ON dbo.PhieuKham(ID_ThuCung);
+CREATE NONCLUSTERED INDEX IX_PhieuKham_NgayDangKy ON dbo.PhieuKham(NgayDangKy);
+
+CREATE NONCLUSTERED INDEX IX_KetQuaKham_ID_BacSi ON dbo.KetQuaKham(ID_BacSi);
+
+
 -- CHÈN DỮ LIỆU CẤU HÌNH (BẮT BUỘC ĐỂ CÁC SP CHẠY ĐƯỢC)
 INSERT INTO CapDoThanhVien (ID_CapDo, TenCapDo, MucChiTieuToiThieu, MucChiTieuGiuHang) VALUES 
 ('CD001', N'Cơ bản', 0, 0),
