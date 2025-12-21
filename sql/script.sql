@@ -855,46 +855,6 @@ BEGIN
 END;
 GO
 
-CREATE PROCEDURE sp_DieuChuyenNhanSu
-    @ID_NhanVien char(10),
-    @ID_ChiNhanhMoi char(10)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @ID_ChiNhanhCu char(10);
-    DECLARE @NgayHienTai date = GETDATE();
-
-    IF NOT EXISTS (SELECT 1 FROM NhanVien WHERE ID_NhanVien = @ID_NhanVien)
-    BEGIN
-        RAISERROR(N'Nhân viên không tồn tại', 16, 1);
-        RETURN -1;
-    END
-
-    SELECT @ID_ChiNhanhCu = ID_ChiNhanh FROM NhanVien WHERE ID_NhanVien = @ID_NhanVien;
-
-    IF @ID_ChiNhanhCu = @ID_ChiNhanhMoi
-    BEGIN
-        RAISERROR(N'Nhân viên đang làm việc tại chi nhánh này rồi', 16, 1);
-        RETURN -1;
-    END
-
-    UPDATE LichSuDieuDong
-    SET NgayKetThuc = DATEADD(day, -1, @NgayHienTai) 
-    WHERE ID_NhanVien = @ID_NhanVien AND ID_ChiNhanh = @ID_ChiNhanhCu AND NgayKetThuc IS NULL;
-
-
-    INSERT INTO LichSuDieuDong(ID_NhanVien, ID_ChiNhanh, NgayBatDau, NgayKetThuc)
-    VALUES (@ID_NhanVien, @ID_ChiNhanhMoi, @NgayHienTai, NULL); 
-
-    UPDATE NhanVien
-    SET ID_ChiNhanh = @ID_ChiNhanhMoi
-    WHERE ID_NhanVien = @ID_NhanVien;
-
-    PRINT N'Điều chuyển nhân viên thành công!';
-    RETURN 0;
-END;
-GO
-
 CREATE PROCEDURE sp_GuiDanhGia
     @ID_TaiKhoan char(10),
     @ID_ChiNhanh char(10),
@@ -958,6 +918,7 @@ BEGIN
 END;
 GO
 
+-- Báo cáo doanh thu cho mỗi chi nhánh
 CREATE PROCEDURE sp_BaoCaoDoanhThu
     @LoaiBaoCao VARCHAR(10),
     @NgayInput DATE = NULL,
@@ -1003,6 +964,7 @@ BEGIN
 END;
 GO
 
+-- Thống kê danh sánh tiêm phòng
 CREATE PROCEDURE sp_DanhSachTiemPhongTrongKy
     @LoaiBaoCao VARCHAR(10),
     @NgayInput DATE = NULL,
@@ -1056,6 +1018,7 @@ BEGIN
 END;
 GO
 
+-- Thống kê độ phổ biến của các loại vacxin
 CREATE PROCEDURE sp_ThongKeVacxinHot
     @LoaiBaoCao VARCHAR(10),
     @NgayInput DATE = NULL,
@@ -1094,6 +1057,7 @@ BEGIN
 END;
 GO
 
+-- Thống kê báo cáo tồn kho của mỗi sản phẩm và sức bán
 CREATE PROCEDURE sp_BaoCaoTonKhoVaSucBan
     @LoaiBaoCao VARCHAR(10),
     @NgayInput DATE = NULL,
@@ -1153,6 +1117,7 @@ BEGIN
 END;
 GO
 
+-- Tra cứu hồ sơ bệnh án của thú cưng
 CREATE PROCEDURE sp_TraCuuHoSoBenhAn
     @SDT_ChuNhan CHAR(10),
     @TenThuCung NVARCHAR(50) = NULL
@@ -1230,6 +1195,7 @@ BEGIN
 END;
 GO
 
+-- Thống kê hiệu suất của nhân viên
 CREATE PROCEDURE sp_ThongKeHieuSuatNhanVien
     @LoaiBaoCao VARCHAR(10),
     @NgayInput DATE = NULL,
@@ -1321,6 +1287,7 @@ BEGIN
 END;
 GO
 
+-- Thống kê tương tác với khách hàng ở một chi nhánh (Để xem những ai lâu rồi chưa quay lại) 
 CREATE PROCEDURE sp_ThongKeKhachHang
     @ID_ChiNhanh CHAR(10) = NULL,
     @SoThangChuaQuayLai INT = 3
@@ -1436,93 +1403,236 @@ BEGIN
 END;
 GO
 
-CREATE PROCEDURE sp_ThemNhanVien
-    @HoTen NVARCHAR(50),
-    @NgaySinh DATE,
-    @GioiTinh NCHAR(3),
-    @NgayVaoLam DATE,
-    @ID_ChucVu CHAR(10),
-    @ID_ChiNhanh CHAR(10),
-    @LuongCoBan FLOAT
+CREATE OR ALTER PROCEDURE sp_ThemNhanVien
+    @HoTen         nvarchar(50),
+    @NgaySinh      date         = NULL,
+    @GioiTinh      nchar(3)      = NULL,
+    @NgayVaoLam    date         = NULL,
+    @ID_ChucVu     char(10),
+    @ID_ChiNhanh   char(10),
+    @LuongCoBan    float
 AS
 BEGIN
     SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    DECLARE @ID_NhanVien char(10) = dbo.TaoIDNhanVien();
 
-    IF NOT EXISTS (SELECT 1 FROM ChucVu WHERE ID_ChucVu = @ID_ChucVu)
-    BEGIN
-        RAISERROR(N'Chức vụ không tồn tại.', 16, 1); RETURN;
-    END
+    IF @NgayVaoLam IS NULL SET @NgayVaoLam = CAST(GETDATE() AS date);
+    IF NOT EXISTS (SELECT 1 FROM dbo.ChucVu WHERE ID_ChucVu = @ID_ChucVu)
+        THROW 50002, N'ID_ChucVu không tồn tại.', 1;
+    IF NOT EXISTS (SELECT 1 FROM dbo.ChiNhanh WHERE ID_ChiNhanh = @ID_ChiNhanh)
+        THROW 50003, N'ID_ChiNhanh không tồn tại.', 1;
 
-    IF NOT EXISTS (SELECT 1 FROM ChiNhanh WHERE ID_ChiNhanh = @ID_ChiNhanh)
-    BEGIN
-        RAISERROR(N'Chi nhánh không tồn tại.', 16, 1); RETURN;
-    END
+    BEGIN TRY
+        BEGIN TRAN;
+        INSERT INTO dbo.NhanVien (ID_NhanVien, HoTen, NgaySinh, GioiTinh, NgayVaoLam, ID_ChucVu, ID_ChiNhanh, LuongCoBan)
+        VALUES (@ID_NhanVien, @HoTen, @NgaySinh, @GioiTinh, @NgayVaoLam, @ID_ChucVu, @ID_ChiNhanh, @LuongCoBan);
 
-    IF @NgayVaoLam < @NgaySinh
-    BEGIN
-        RAISERROR(N'Ngày vào làm không hợp lý (nhỏ hơn ngày sinh).', 16, 1); RETURN;
-    END
-
-    INSERT INTO NhanVien(ID_NhanVien, HoTen, NgaySinh, GioiTinh, NgayVaoLam, ID_ChucVu, ID_ChiNhanh, LuongCoBan)
-    VALUES (dbo.TaoIDNhanVien(), @HoTen, @NgaySinh, @GioiTinh, @NgayVaoLam, @ID_ChucVu, @ID_ChiNhanh, @LuongCoBan);
-
-    PRINT N'Thêm nhân viên thành công.';
-END;
+        INSERT INTO dbo.LichSuDieuDong (ID_NhanVien, ID_ChiNhanh, NgayBatDau, NgayKetThuc)
+        VALUES (@ID_NhanVien, @ID_ChiNhanh, @NgayVaoLam, NULL);
+        COMMIT;
+        PRINT N'Thêm nhân viên thành công!';
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK;
+        THROW;
+    END CATCH
+END
 GO
 
-CREATE PROCEDURE sp_CapNhatNhanVien
-    @ID_NhanVien CHAR(10),
-    @HoTen NVARCHAR(50) = NULL,
-    @NgaySinh DATE = NULL,
-    @GioiTinh NCHAR(3) = NULL,
-    @ID_ChucVu CHAR(10) = NULL,
-    @LuongCoBan FLOAT = NULL
+CREATE OR ALTER PROCEDURE sp_CapNhatNhanVien
+    @ID_NhanVien  char(10),
+    @HoTen        nvarchar(50) = NULL,
+    @NgaySinh     date         = NULL,
+    @GioiTinh     nchar(3)      = NULL,
+    @ID_ChucVu    char(10)     = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
+    IF NOT EXISTS (SELECT 1 FROM dbo.NhanVien WHERE ID_NhanVien = @ID_NhanVien)
+        THROW 50010, N'Không tìm thấy nhân viên.', 1;
+    IF @ID_ChucVu IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.ChucVu WHERE ID_ChucVu = @ID_ChucVu)
+        THROW 50011, N'ID_ChucVu không tồn tại.', 1;
 
-    IF NOT EXISTS (SELECT 1 FROM NhanVien WHERE ID_NhanVien = @ID_NhanVien)
-    BEGIN
-        RAISERROR(N'Nhân viên không tồn tại.', 16, 1); RETURN;
-    END
-
-    UPDATE NhanVien
-    SET 
-        HoTen = COALESCE(@HoTen, HoTen),
+    UPDATE dbo.NhanVien
+    SET HoTen = COALESCE(@HoTen, HoTen),
         NgaySinh = COALESCE(@NgaySinh, NgaySinh),
         GioiTinh = COALESCE(@GioiTinh, GioiTinh),
-        ID_ChucVu = COALESCE(@ID_ChucVu, ID_ChucVu),
-        LuongCoBan = COALESCE(@LuongCoBan, LuongCoBan)
+        ID_ChucVu= COALESCE(@ID_ChucVu, ID_ChucVu)
     WHERE ID_NhanVien = @ID_NhanVien;
-
-    PRINT N'Cập nhật thông tin thành công.';
-END;
+END
 GO
 
-CREATE PROCEDURE sp_XoaNhanVien
-    @ID_NhanVien CHAR(10)
+CREATE OR ALTER PROCEDURE sp_DieuChinhLuongTheoPhanTram
+    @ID_NhanVien  char(10),
+    @TyLePhanTram float
 AS
 BEGIN
     SET NOCOUNT ON;
+    IF NOT EXISTS (SELECT 1 FROM dbo.NhanVien WHERE ID_NhanVien = @ID_NhanVien)
+        THROW 50021, N'Không tìm thấy nhân viên.', 1;
+    UPDATE dbo.NhanVien
+    SET LuongCoBan = LuongCoBan * (1 + @TyLePhanTram / 100.0)
+    WHERE ID_NhanVien = @ID_NhanVien;
+END
+GO
 
-    IF NOT EXISTS (SELECT 1 FROM NhanVien WHERE ID_NhanVien = @ID_NhanVien)
-    BEGIN
-        RAISERROR(N'Nhân viên không tồn tại.', 16, 1); RETURN;
-    END
+CREATE OR ALTER PROCEDURE sp_DieuChuyenNhanSu
+    @ID_NhanVien     char(10),
+    @ID_ChiNhanhMoi  char(10),
+    @NgayBatDauMoi   date = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    IF @NgayBatDauMoi IS NULL SET @NgayBatDauMoi = CAST(GETDATE() AS date);
 
-    -- Kiểm tra ràng buộc dữ liệu (Đã từng làm việc gì chưa?)
-    IF EXISTS (SELECT 1 FROM HoaDon WHERE ID_NhanVien = @ID_NhanVien)
-    OR EXISTS (SELECT 1 FROM KetQuaKham WHERE ID_BacSi = @ID_NhanVien)
-    OR EXISTS (SELECT 1 FROM DichVu_TiemPhong WHERE ID_NhanVien = @ID_NhanVien)
-    BEGIN
-        RAISERROR(N'Không thể xóa: Nhân viên này đã có dữ liệu lịch sử làm việc (Hóa đơn/Khám/Tiêm).', 16, 1);
-        RETURN;
-    END
+    IF NOT EXISTS (SELECT 1 FROM dbo.NhanVien WHERE ID_NhanVien = @ID_NhanVien)
+        THROW 50030, N'Không tìm thấy nhân viên.', 1;
+    IF NOT EXISTS (SELECT 1 FROM dbo.ChiNhanh WHERE ID_ChiNhanh = @ID_ChiNhanhMoi)
+        THROW 50031, N'Chi nhánh mới không tồn tại.', 1;
 
-    DELETE FROM NhanVien WHERE ID_NhanVien = @ID_NhanVien;
-    
-    PRINT N'Đã xóa hồ sơ nhân viên thành công.';
-END;
+    BEGIN TRY
+        BEGIN TRAN;
+        -- Kết thúc đợt hiện tại
+        UPDATE dbo.LichSuDieuDong
+        SET NgayKetThuc = DATEADD(DAY, -1, @NgayBatDauMoi)
+        WHERE ID_NhanVien = @ID_NhanVien AND NgayKetThuc IS NULL;
+        -- Thêm đợt mới
+        INSERT INTO dbo.LichSuDieuDong (ID_NhanVien, ID_ChiNhanh, NgayBatDau, NgayKetThuc)
+        VALUES (@ID_NhanVien, @ID_ChiNhanhMoi, @NgayBatDauMoi, NULL);
+        -- Cập nhật chi nhánh hiện tại của NV
+        UPDATE dbo.NhanVien
+        SET ID_ChiNhanh = @ID_ChiNhanhMoi
+        WHERE ID_NhanVien = @ID_NhanVien;
+        COMMIT;
+        PRINT N'Điều chuyển nhân viên thành công!';
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK;
+        THROW;
+    END CATCH
+END
+GO
+
+CREATE OR ALTER PROCEDURE sp_XoaNhanVien
+    @ID_NhanVien char(10)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    IF NOT EXISTS (SELECT 1 FROM dbo.NhanVien WHERE ID_NhanVien = @ID_NhanVien)
+        THROW 50040, N'Không tìm thấy nhân viên.', 1;
+    IF EXISTS (SELECT 1 FROM dbo.HoaDon WHERE ID_NhanVien = @ID_NhanVien)
+        THROW 50041, N'Không thể xóa: nhân viên đã lập hóa đơn.', 1;
+    IF EXISTS (SELECT 1 FROM dbo.DichVu_TiemPhong WHERE ID_NhanVien = @ID_NhanVien)
+        THROW 50042, N'Không thể xóa: nhân viên có phát sinh tiêm phòng.', 1;
+    IF EXISTS (SELECT 1 FROM dbo.KetQuaKham WHERE ID_BacSi = @ID_NhanVien)
+        THROW 50043, N'Không thể xóa: nhân viên có kết quả khám.', 1;
+
+    BEGIN TRY
+        BEGIN TRAN;
+        DELETE FROM dbo.LichSuDieuDong WHERE ID_NhanVien = @ID_NhanVien;
+        DELETE FROM dbo.NhanVien WHERE ID_NhanVien = @ID_NhanVien;
+        COMMIT;
+        PRINT N'Đã xóa nhân viên!';
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK;
+        THROW;
+    END CATCH
+END
+GO
+
+-- CÁC THỐNG KÊ BÁO CÁO CẤP CÔNG TY
+
+-- Báo cáo doanh thu từng chi nhánh và toàn hệ thống
+CREATE PROCEDURE sp_BaoCaoDoanhThu_ChiNhanh_HeThong
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT
+        CASE WHEN GROUPING(cn.ID_ChiNhanh) = 1 THEN 'ALL' ELSE cn.ID_ChiNhanh END AS ID_ChiNhanh,
+        CASE WHEN GROUPING(cn.ID_ChiNhanh) = 1 THEN N'Toàn hệ thống' ELSE cn.Ten_ChiNhanh END AS Ten_ChiNhanh,
+        SUM(ISNULL(hd.TongTien, 0)) AS DoanhThu
+    FROM HoaDon hd
+    JOIN NhanVien nv ON nv.ID_NhanVien = hd.ID_NhanVien
+    JOIN ChiNhanh cn ON cn.ID_ChiNhanh = nv.ID_ChiNhanh
+    GROUP BY GROUPING SETS
+    (
+        (cn.ID_ChiNhanh, cn.Ten_ChiNhanh),
+        ()
+    );
+END
+GO
+
+-- Báo cáo Dịch vụ có doanh thu cao nhất trong vòng 6 tháng
+CREATE PROCEDURE sp_ThongKeDichVuTop
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @FromDate date = DATEADD(MONTH, -6, CAST(GETDATE() AS date));
+
+    WITH RevenueLines AS (
+        -- 1) Doanh thu từ khám
+        SELECT hd.ID_HoaDon, cd.ID_DichVu, CAST(cd.Gia_DichVu AS float) AS ThanhTien
+        FROM HoaDon hd JOIN PhieuKham pk ON pk.ID_HoaDon = hd.ID_HoaDon
+        JOIN ChiNhanh_DichVu cd ON cd.ID_DichVuDuocDung = pk.ID_DichVu
+        WHERE hd.NgayLap >= @FromDate AND pk.TrangThai = N'Đã khám'       
+        UNION ALL
+        -- 2) Doanh thu từ tiêm phòng
+        SELECT hd.ID_HoaDon, cd.ID_DichVu, CAST(cd.Gia_DichVu * (1 - ISNULL(tp.KhuyenMai, 0) / 100.0) AS float) AS ThanhTien
+        FROM HoaDon hd JOIN DichVu_TiemPhong tp ON tp.ID_HoaDon = hd.ID_HoaDon
+        JOIN ChiNhanh_DichVu cd ON cd.ID_DichVuDuocDung = tp.ID_DichVu
+        WHERE hd.NgayLap >= @FromDate AND tp.NgayTiem IS NOT NULL
+        UNION ALL
+        -- 3) Doanh thu từ mua hàng
+        SELECT hd.ID_HoaDon, cd.ID_DichVu, CAST(sp.GiaBan * mh.SoLuong AS float) AS ThanhTien
+        FROM HoaDon hd JOIN DichVu_MuaHang mh ON mh.ID_HoaDon = hd.ID_HoaDon
+        JOIN SanPham sp ON sp.ID_SanPham = mh.ID_SanPham
+        JOIN ChiNhanh_DichVu cd ON cd.ID_DichVuDuocDung = mh.ID_DichVu
+        WHERE hd.NgayLap >= @FromDate
+    )
+    SELECT TOP (1) WITH TIES
+        dv.ID_DichVu, dv.Ten_DichVu, dv.Loai_DichVu,
+        SUM(rl.ThanhTien) AS DoanhThu_6Thang, COUNT(DISTINCT rl.ID_HoaDon) AS SoHoaDon
+    FROM RevenueLines rl JOIN DichVu dv ON dv.ID_DichVu = rl.ID_DichVu
+    GROUP BY dv.ID_DichVu, dv.Ten_DichVu, dv.Loai_DichVu
+    ORDER BY DoanhThu_6Thang DESC;
+END
+GO
+
+-- Thống kê số lượng thú cưng được chăm sóc
+CREATE PROCEDURE sp_ThongKeThuCungChamSoc
+AS
+BEGIN
+    SET NOCOUNT ON;
+    WITH CaredPets AS (
+        SELECT DISTINCT pk.ID_ThuCung FROM PhieuKham pk WHERE pk.TrangThai = N'Đã khám'
+        UNION
+        SELECT DISTINCT tp.ID_ThuCung FROM DichVu_TiemPhong tp WHERE tp.NgayTiem IS NOT NULL
+    )
+    SELECT l.ID_Loai, l.TenLoai, g.ID_Giong, g.TenGiong, COUNT(DISTINCT tc.ID_ThuCung) AS SoLuongThuCungDuocChamSoc
+    FROM CaredPets cp JOIN ThuCung tc ON tc.ID_ThuCung = cp.ID_ThuCung
+    JOIN Giong g ON g.ID_Giong = tc.ID_Giong JOIN Loai l ON l.ID_Loai = g.ID_Loai
+    GROUP BY l.ID_Loai, l.TenLoai, g.ID_Giong, g.TenGiong
+    ORDER BY SoLuongThuCungDuocChamSoc DESC, l.TenLoai, g.TenGiong;
+END
+GO
+
+-- Thống kê tình hình hội viên
+CREATE PROCEDURE sp_ThongKeHoiVien
+AS
+BEGIN
+    SET NOCOUNT ON;
+    WITH M AS (
+        SELECT CASE WHEN cd.TenCapDo IN (N'Cơ bản', N'Thân thiết', N'VIP') THEN cd.TenCapDo ELSE N'Khác/Chưa có cấp độ' END AS CapDo
+        FROM TaiKhoanThanhVien tv LEFT JOIN CapDoThanhVien cd ON cd.ID_CapDo = tv.ID_CapDo
+    )
+    SELECT CapDo, COUNT(*) AS SoLuong,
+        CAST(100.0 * COUNT(*) / NULLIF(SUM(COUNT(*)) OVER (), 0) AS decimal(5,2)) AS TyLe_PhanTram
+    FROM M GROUP BY CapDo ORDER BY SoLuong DESC;
+END
 GO
 
 -- 5. TRIGGERS
