@@ -1,32 +1,16 @@
-import { useState, useEffect } from 'react';
+import useFetchData from '../hooks/useFetchData';
+import Pagination from './common/Pagination';
+import { Loading, ErrorMessage, EmptyState } from './common/StatusComponents';
 
 export default function HoaDonList() {
-    const [hoaDons, setHoaDons] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-
-    useEffect(() => {
-        fetchHoaDons();
-    }, []);
-
-    const fetchHoaDons = async () => {
-        try {
-            setLoading(true);
-            const response = await fetch('http://localhost:5000/api/hoadon');
-            const data = await response.json();
-            if (Array.isArray(data)) {
-                setHoaDons(data);
-            } else if (data && Array.isArray(data.data)) {
-                setHoaDons(data.data);
-            } else {
-                setError('Không thể tải danh sách hóa đơn');
-            }
-        } catch (err) {
-            setError('Lỗi kết nối: ' + err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
+    const {
+        data: hoaDons,
+        loading,
+        error,
+        pagination,
+        goToPage,
+        refresh
+    } = useFetchData('hoadon', { pagination: true, initialLimit: 20 });
 
     const formatDate = (dateString) => {
         return new Date(dateString).toLocaleDateString('vi-VN');
@@ -52,8 +36,8 @@ export default function HoaDonList() {
         }
     };
 
-    if (loading) return <div className="loading">⏳ Đang tải dữ liệu...</div>;
-    if (error) return <div className="error">❌ {error}</div>;
+    if (loading) return <Loading message="Đang tải danh sách hóa đơn..." />;
+    if (error) return <ErrorMessage message={error} onRetry={refresh} />;
 
     return (
         <div className="component-container">
@@ -65,10 +49,7 @@ export default function HoaDonList() {
             </div>
 
             {hoaDons.length === 0 ? (
-                <div className="empty-state">
-                    <div className="empty-state-icon">📭</div>
-                    <p>Chưa có hóa đơn nào</p>
-                </div>
+                <EmptyState icon="📭" message="Chưa có hóa đơn nào" />
             ) : (
                 <div className="table-container">
                     <table>
@@ -117,20 +98,21 @@ export default function HoaDonList() {
                             ))}
                         </tbody>
                     </table>
+                    <Pagination pagination={pagination} onPageChange={goToPage} />
                 </div>
             )}
 
             {hoaDons.length > 0 && (
                 <div style={{
-                    marginTop: '2rem',
+                    marginTop: '1rem',
                     padding: '1.5rem',
                     background: '#f8fafc',
                     borderRadius: '0.75rem',
                     borderLeft: '4px solid #3b82f6'
                 }}>
                     <p style={{ color: '#64748b' }}>
-                        <strong>Tổng cộng:</strong> {hoaDons.length} hóa đơn | 
-                        <strong style={{ marginLeft: '1rem' }}>Tổng tiền:</strong> {formatMoney(hoaDons.reduce((sum, hd) => sum + hd.TongTien, 0))}
+                        <strong>Hiển thị:</strong> {hoaDons.length} hóa đơn (trang {pagination.page}/{pagination.totalPages}) | 
+                        <strong style={{ marginLeft: '1rem' }}>Tổng số:</strong> {pagination.total} hóa đơn
                     </p>
                 </div>
             )}

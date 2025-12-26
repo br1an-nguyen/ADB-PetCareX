@@ -1,34 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import useFetchData from '../hooks/useFetchData';
+import Pagination from './common/Pagination';
+import { Loading, ErrorMessage, EmptyState } from './common/StatusComponents';
 
 export default function ThuCungList() {
-    const [thuCungs, setThuCungs] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [viewType, setViewType] = useState('grid'); // 'grid' hoặc 'table'
+    const {
+        data: thuCungs,
+        loading,
+        error,
+        pagination,
+        goToPage,
+        refresh
+    } = useFetchData('thucung', { pagination: true, initialLimit: 12 });
 
-    useEffect(() => {
-        fetchThuCungs();
-    }, []);
+    const [viewType, setViewType] = useState('grid');
 
-    const fetchThuCungs = async () => {
-        try {
-            setLoading(true);
-            const response = await fetch('http://localhost:5000/api/thucung');
-            const data = await response.json();
-            if (data.success) {
-                setThuCungs(data.data);
-            } else {
-                setError('Không thể tải danh sách thú cưng');
-            }
-        } catch (err) {
-            setError('Lỗi kết nối: ' + err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    if (loading) return <div className="loading">⏳ Đang tải dữ liệu...</div>;
-    if (error) return <div className="error">❌ {error}</div>;
+    if (loading) return <Loading message="Đang tải danh sách thú cưng..." />;
+    if (error) return <ErrorMessage message={error} onRetry={refresh} />;
 
     return (
         <div className="component-container">
@@ -51,46 +39,46 @@ export default function ThuCungList() {
             </div>
 
             {thuCungs.length === 0 ? (
-                <div className="empty-state">
-                    <div className="empty-state-icon">🐾</div>
-                    <p>Chưa có thú cưng nào</p>
-                </div>
+                <EmptyState icon="🐾" message="Chưa có thú cưng nào" />
             ) : viewType === 'grid' ? (
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-                    gap: '1.5rem'
-                }}>
-                    {thuCungs.map(tc => (
-                        <div key={tc.ID_ThuCung} className="form-card" style={{
-                            transition: 'all 0.3s ease'
-                        }}>
-                            <h3 style={{
-                                color: '#3b82f6',
-                                marginBottom: '1rem',
-                                borderBottom: '2px solid #e2e8f0',
-                                paddingBottom: '0.75rem'
+                <>
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                        gap: '1.5rem'
+                    }}>
+                        {thuCungs.map(tc => (
+                            <div key={tc.ID_ThuCung} className="form-card" style={{
+                                transition: 'all 0.3s ease'
                             }}>
-                                {tc.TenThuCung}
-                            </h3>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                <p><strong>🐕 Giống:</strong> {tc.TenGiong} <span style={{ color: '#64748b' }}>({tc.TenLoai})</span></p>
-                                <p><strong>🎂 Tuổi:</strong> {tc.Tuoi} năm</p>
-                                <p><strong>⚖️ Cân nặng:</strong> {tc.CanNang} kg</p>
-                                <div style={{
-                                    background: '#f8fafc',
-                                    padding: '0.75rem',
-                                    borderRadius: '0.5rem',
-                                    borderLeft: '3px solid #10b981'
+                                <h3 style={{
+                                    color: '#3b82f6',
+                                    marginBottom: '1rem',
+                                    borderBottom: '2px solid #e2e8f0',
+                                    paddingBottom: '0.75rem'
                                 }}>
-                                    <p style={{ margin: '0.25rem 0' }}><strong>👤 Chủ sở hữu:</strong></p>
-                                    <p style={{ margin: '0.25rem 0', fontWeight: '500' }}>{tc.TenChuSoHuu}</p>
-                                    <p style={{ margin: '0.25rem 0', color: '#64748b' }}>📞 {tc.SDTChuSoHuu}</p>
+                                    {tc.TenThuCung}
+                                </h3>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                    <p><strong>🐕 Giống:</strong> {tc.TenGiong} <span style={{ color: '#64748b' }}>({tc.TenLoai})</span></p>
+                                    <p><strong>🎂 Tuổi:</strong> {tc.Tuoi} năm</p>
+                                    <p><strong>⚖️ Cân nặng:</strong> {tc.CanNang} kg</p>
+                                    <div style={{
+                                        background: '#f8fafc',
+                                        padding: '0.75rem',
+                                        borderRadius: '0.5rem',
+                                        borderLeft: '3px solid #10b981'
+                                    }}>
+                                        <p style={{ margin: '0.25rem 0' }}><strong>👤 Chủ sở hữu:</strong></p>
+                                        <p style={{ margin: '0.25rem 0', fontWeight: '500' }}>{tc.TenChuSoHuu}</p>
+                                        <p style={{ margin: '0.25rem 0', color: '#64748b' }}>📞 {tc.SDTChuSoHuu}</p>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                    <Pagination pagination={pagination} onPageChange={goToPage} />
+                </>
             ) : (
                 <div className="table-container">
                     <table>
@@ -119,6 +107,7 @@ export default function ThuCungList() {
                             ))}
                         </tbody>
                     </table>
+                    <Pagination pagination={pagination} onPageChange={goToPage} />
                 </div>
             )}
         </div>

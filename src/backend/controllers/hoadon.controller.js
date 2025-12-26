@@ -1,8 +1,18 @@
 const db = require('../config/database');
 
-// Lấy danh sách hóa đơn
+// Lấy danh sách hóa đơn (có phân trang)
 exports.getAllHoaDon = async (req, res) => {
     try {
+        // Lấy tham số phân trang từ query string
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const offset = (page - 1) * limit;
+        
+        // Query đếm tổng số - Profiler tự động log
+        const countQuery = `SELECT COUNT(*) as total FROM HoaDon`;
+        const [[{ total }]] = await db.executeQuery(countQuery, [], 'HoaDon.count');
+        
+        // Query lấy dữ liệu với phân trang
         const query = `
             SELECT 
                 HD.*,
@@ -16,14 +26,22 @@ exports.getAllHoaDon = async (req, res) => {
             LEFT JOIN ChiNhanh CN ON NV.ID_ChiNhanh = CN.ID_ChiNhanh
             LEFT JOIN HinhThucThanhToan HT ON HD.ID_HinhThucTT = HT.ID_HinhThuc
             ORDER BY HD.NgayLap DESC
+            LIMIT ? OFFSET ?
         `;
-        const [rows] = await db.query(query);
+        const [rows] = await db.executeQuery(query, [limit, offset], 'HoaDon.list');
+        
         res.json({
             success: true,
-            data: rows
+            data: rows,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit)
+            }
         });
     } catch (error) {
-        console.error('Error:', error);
+        console.error('❌ [HoaDon] Error:', error);
         res.status(500).json({
             success: false,
             message: 'Lỗi khi lấy danh sách hóa đơn',

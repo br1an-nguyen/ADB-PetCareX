@@ -1,8 +1,18 @@
 const db = require('../config/database');
 
-// Lấy danh sách thú cưng
+// Lấy danh sách thú cưng (có phân trang)
 exports.getAllThuCung = async (req, res) => {
     try {
+        // Lấy tham số phân trang từ query string
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const offset = (page - 1) * limit;
+        
+        // Query đếm tổng số - Profiler tự động log
+        const countQuery = `SELECT COUNT(*) as total FROM ThuCung`;
+        const [[{ total }]] = await db.executeQuery(countQuery, [], 'ThuCung.count');
+        
+        // Query lấy dữ liệu với phân trang
         const query = `
             SELECT 
                 TC.*, 
@@ -14,14 +24,22 @@ exports.getAllThuCung = async (req, res) => {
             LEFT JOIN Giong G ON TC.ID_Giong = G.ID_Giong
             LEFT JOIN Loai L ON G.ID_Loai = L.ID_Loai
             LEFT JOIN TaiKhoanThanhVien TKTN ON TC.ID_TaiKhoan = TKTN.ID_TaiKhoan
+            LIMIT ? OFFSET ?
         `;
-        const [rows] = await db.query(query);
+        const [rows] = await db.executeQuery(query, [limit, offset], 'ThuCung.list');
+        
         res.json({
             success: true,
-            data: rows
+            data: rows,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit)
+            }
         });
     } catch (error) {
-        console.error('Error:', error);
+        console.error('❌ [ThuCung] Error:', error);
         res.status(500).json({
             success: false,
             message: 'Lỗi khi lấy danh sách thú cưng',

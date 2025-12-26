@@ -1,9 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import useFetchData from '../hooks/useFetchData';
+import Pagination from './common/Pagination';
+import { Loading, ErrorMessage, EmptyState } from './common/StatusComponents';
 
 export default function KhachHangList() {
-    const [khachHangs, setKhachHangs] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const {
+        data: khachHangs,
+        loading,
+        error,
+        pagination,
+        goToPage,
+        refresh,
+        remove,
+        create,
+        clearError
+    } = useFetchData('khachhang', { pagination: true, initialLimit: 20 });
+
     const [showForm, setShowForm] = useState(false);
     const [formData, setFormData] = useState({
         HoTen: '',
@@ -13,58 +25,17 @@ export default function KhachHangList() {
     });
     const [editingId, setEditingId] = useState(null);
 
-    useEffect(() => {
-        fetchKhachHangs();
-    }, []);
-
-    const fetchKhachHangs = async () => {
-        try {
-            setLoading(true);
-            const response = await fetch('http://localhost:5000/api/khachhang');
-            const data = await response.json();
-            if (data && Array.isArray(data.data)) {
-                setKhachHangs(data.data);
-            } else if (Array.isArray(data)) {
-                setKhachHangs(data);
-            } else {
-                setError('Không thể tải danh sách khách hàng');
-            }
-        } catch (err) {
-            setError('Lỗi kết nối: ' + err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const handleSubmit = async (e) => {
         e.preventDefault();
-        try {
-            const response = await fetch('http://localhost:5000/api/khachhang', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
-            });
-            if (response.ok) {
-                await fetchKhachHangs();
-                resetForm();
-            }
-        } catch (err) {
-            setError('Lỗi: ' + err.message);
+        const result = await create(formData);
+        if (result.success) {
+            resetForm();
         }
     };
 
     const handleDelete = async (id) => {
         if (window.confirm('Bạn có chắc muốn xóa khách hàng này?')) {
-            try {
-                const response = await fetch(`http://localhost:5000/api/khachhang/${id}`, {
-                    method: 'DELETE'
-                });
-                if (response.ok) {
-                    await fetchKhachHangs();
-                }
-            } catch (err) {
-                setError('Lỗi: ' + err.message);
-            }
+            await remove(id);
         }
     };
 
@@ -72,10 +43,11 @@ export default function KhachHangList() {
         setFormData({ HoTen: '', Phone: '', Email: '', DiaChi: '' });
         setEditingId(null);
         setShowForm(false);
-        setError(null);
+        clearError();
     };
 
-    if (loading) return <div className="loading">⏳ Đang tải dữ liệu...</div>;
+    if (loading) return <Loading message="Đang tải danh sách khách hàng..." />;
+    if (error) return <ErrorMessage message={error} onRetry={refresh} />;
 
     return (
         <div className="component-container">
@@ -88,8 +60,6 @@ export default function KhachHangList() {
                     {showForm ? '✖ Đóng' : '➕ Thêm khách hàng'}
                 </button>
             </div>
-
-            {error && <div className="error">❌ {error}</div>}
 
             {showForm && (
                 <div className="form-card">
@@ -149,10 +119,7 @@ export default function KhachHangList() {
             )}
 
             {khachHangs.length === 0 ? (
-                <div className="empty-state">
-                    <div className="empty-state-icon">📭</div>
-                    <p>Chưa có khách hàng nào</p>
-                </div>
+                <EmptyState icon="📭" message="Chưa có khách hàng nào" />
             ) : (
                 <div className="table-container">
                     <table>
@@ -198,6 +165,8 @@ export default function KhachHangList() {
                             ))}
                         </tbody>
                     </table>
+                    
+                    <Pagination pagination={pagination} onPageChange={goToPage} />
                 </div>
             )}
         </div>

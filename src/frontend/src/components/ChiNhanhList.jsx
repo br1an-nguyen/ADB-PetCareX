@@ -1,9 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import useFetchData from '../hooks/useFetchData';
+import Pagination from './common/Pagination';
+import { Loading, ErrorMessage, EmptyState } from './common/StatusComponents';
 
 export default function ChiNhanhList({ onSelectChiNhanh }) {
-    const [chiNhanhs, setChiNhanhs] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const {
+        data: chiNhanhs,
+        loading,
+        error,
+        pagination,
+        goToPage,
+        refresh,
+        create,
+        remove,
+        clearError
+    } = useFetchData('chinhanh', { pagination: true, initialLimit: 12 });
+
     const [showForm, setShowForm] = useState(false);
     const [formData, setFormData] = useState({
         Ten_ChiNhanh: '',
@@ -13,56 +25,17 @@ export default function ChiNhanhList({ onSelectChiNhanh }) {
         GioDongCua: ''
     });
 
-    useEffect(() => {
-        fetchChiNhanhs();
-    }, []);
-
-    const fetchChiNhanhs = async () => {
-        try {
-            setLoading(true);
-            const response = await fetch('http://localhost:5000/api/chinhanh');
-            const data = await response.json();
-            if (data.success) {
-                setChiNhanhs(data.data);
-            } else {
-                setError('Không thể tải danh sách chi nhánh');
-            }
-        } catch (err) {
-            setError('Lỗi kết nối: ' + err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const handleSubmit = async (e) => {
         e.preventDefault();
-        try {
-            const response = await fetch('http://localhost:5000/api/chinhanh', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
-            });
-            if (response.ok) {
-                await fetchChiNhanhs();
-                resetForm();
-            }
-        } catch (err) {
-            setError('Lỗi: ' + err.message);
+        const result = await create(formData);
+        if (result.success) {
+            resetForm();
         }
     };
 
     const handleDelete = async (id) => {
         if (window.confirm('Bạn có chắc muốn xóa chi nhánh này?')) {
-            try {
-                const response = await fetch(`http://localhost:5000/api/chinhanh/${id}`, {
-                    method: 'DELETE'
-                });
-                if (response.ok) {
-                    await fetchChiNhanhs();
-                }
-            } catch (err) {
-                setError('Lỗi: ' + err.message);
-            }
+            await remove(id);
         }
     };
 
@@ -75,11 +48,11 @@ export default function ChiNhanhList({ onSelectChiNhanh }) {
             GioDongCua: ''
         });
         setShowForm(false);
-        setError(null);
+        clearError();
     };
 
-    if (loading) return <div className="loading">⏳ Đang tải dữ liệu...</div>;
-    if (error) return <div className="error">❌ {error}</div>;
+    if (loading) return <Loading message="Đang tải danh sách chi nhánh..." />;
+    if (error) return <ErrorMessage message={error} onRetry={refresh} />;
 
     return (
         <div className="component-container">
@@ -92,8 +65,6 @@ export default function ChiNhanhList({ onSelectChiNhanh }) {
                     {showForm ? '✖ Đóng' : '➕ Thêm chi nhánh'}
                 </button>
             </div>
-
-            {error && <div className="error">❌ {error}</div>}
 
             {showForm && (
                 <div className="form-card">
@@ -164,50 +135,50 @@ export default function ChiNhanhList({ onSelectChiNhanh }) {
             )}
 
             {chiNhanhs.length === 0 ? (
-                <div className="empty-state">
-                    <div className="empty-state-icon">🏢</div>
-                    <p>Chưa có chi nhánh nào</p>
-                </div>
+                <EmptyState icon="🏢" message="Chưa có chi nhánh nào" />
             ) : (
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
-                    gap: '1.5rem',
-                    marginTop: '2rem'
-                }}>
-                    {chiNhanhs.map(cn => (
-                        <div 
-                            key={cn.ID_ChiNhanh} 
-                            className="form-card"
-                            onClick={() => onSelectChiNhanh && onSelectChiNhanh(cn)}
-                            style={{ cursor: 'pointer' }}
-                        >
-                            <h3 style={{
-                                color: '#10b981',
-                                marginBottom: '1rem',
-                                borderBottom: '2px solid #e2e8f0',
-                                paddingBottom: '0.75rem'
-                            }}>
-                                {cn.Ten_ChiNhanh}
-                            </h3>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                <p><strong>📍 Địa chỉ:</strong> {cn.DiaChi_ChiNhanh}</p>
-                                <p><strong>📞 Số điện thoại:</strong> {cn.SDT}</p>
-                                <p><strong>🕐 Giờ hoạt động:</strong> {cn.GioMoCua} - {cn.GioDongCua}</p>
-                                <button 
-                                    className="btn btn-danger" 
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDelete(cn.ID_ChiNhanh);
-                                    }}
-                                    style={{ marginTop: '0.5rem' }}
-                                >
-                                    🗑️ Xóa
-                                </button>
+                <>
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
+                        gap: '1.5rem',
+                        marginTop: '2rem'
+                    }}>
+                        {chiNhanhs.map(cn => (
+                            <div 
+                                key={cn.ID_ChiNhanh} 
+                                className="form-card"
+                                onClick={() => onSelectChiNhanh && onSelectChiNhanh(cn)}
+                                style={{ cursor: 'pointer' }}
+                            >
+                                <h3 style={{
+                                    color: '#10b981',
+                                    marginBottom: '1rem',
+                                    borderBottom: '2px solid #e2e8f0',
+                                    paddingBottom: '0.75rem'
+                                }}>
+                                    {cn.Ten_ChiNhanh}
+                                </h3>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                    <p><strong>📍 Địa chỉ:</strong> {cn.DiaChi_ChiNhanh}</p>
+                                    <p><strong>📞 Số điện thoại:</strong> {cn.SDT}</p>
+                                    <p><strong>🕐 Giờ hoạt động:</strong> {cn.GioMoCua} - {cn.GioDongCua}</p>
+                                    <button 
+                                        className="btn btn-danger" 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDelete(cn.ID_ChiNhanh);
+                                        }}
+                                        style={{ marginTop: '0.5rem' }}
+                                    >
+                                        🗑️ Xóa
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                    <Pagination pagination={pagination} onPageChange={goToPage} />
+                </>
             )}
         </div>
     );

@@ -1,8 +1,18 @@
 const db = require('../config/database');
 
-// Lấy danh sách khách hàng
+// Lấy danh sách khách hàng (có phân trang)
 exports.getAllKhachHang = async (req, res) => {
     try {
+        // Lấy tham số phân trang từ query string
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const offset = (page - 1) * limit;
+        
+        // Query đếm tổng số - Profiler tự động log
+        const countQuery = `SELECT COUNT(*) as total FROM TaiKhoanThanhVien`;
+        const [[{ total }]] = await db.executeQuery(countQuery, [], 'KhachHang.count');
+        
+        // Query lấy dữ liệu với phân trang
         const query = `
             SELECT 
                 TKTN.ID_TaiKhoan,
@@ -15,14 +25,22 @@ exports.getAllKhachHang = async (req, res) => {
             LEFT JOIN CapDoThanhVien CDT ON TKTN.ID_CapDo = CDT.ID_CapDo
             LEFT JOIN ThuCung TC ON TKTN.ID_TaiKhoan = TC.ID_TaiKhoan
             GROUP BY TKTN.ID_TaiKhoan, TKTN.HoTen, TKTN.Phone, TKTN.Email, CDT.TenCapDo
+            LIMIT ? OFFSET ?
         `;
-        const [rows] = await db.query(query);
+        const [rows] = await db.executeQuery(query, [limit, offset], 'KhachHang.list');
+        
         res.json({
             success: true,
-            data: rows
+            data: rows,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit)
+            }
         });
     } catch (error) {
-        console.error('Error:', error);
+        console.error('❌ [KhachHang] Error:', error);
         res.status(500).json({
             success: false,
             message: 'Lỗi khi lấy danh sách khách hàng',
