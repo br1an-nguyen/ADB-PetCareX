@@ -1,7 +1,30 @@
 const mysql = require('mysql2');
+const { performance } = require('perf_hooks');
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+const dotenv = require('dotenv');
+
+// Allow selecting env file via ENV_FILE or ENV_PROFILE
+const ENV_PROFILE = process.env.ENV_PROFILE; // 'index' | 'non-index'
+const EXPLICIT_ENV = process.env.ENV_FILE;   // absolute or relative path
+
+let envPath;
+if (EXPLICIT_ENV && EXPLICIT_ENV.length > 0) {
+    envPath = path.isAbsolute(EXPLICIT_ENV)
+        ? EXPLICIT_ENV
+        : path.join(__dirname, '..', EXPLICIT_ENV);
+} else if (ENV_PROFILE === 'index') {
+    // Use connect/index.env when profiling indexed DB
+    envPath = path.join(__dirname, '..', 'connect', 'index.env');
+} else if (ENV_PROFILE === 'non-index') {
+    // Use connect/non-index.env when profiling non-indexed DB
+    envPath = path.join(__dirname, '..', 'connect', 'non-index.env');
+} else {
+    // Default: backend/.env
+    envPath = path.join(__dirname, '..', '.env');
+}
+
+dotenv.config({ path: envPath });
 
 // ========== QUERY PROFILER CONFIG ==========
 const ENABLE_QUERY_PROFILER = true;  // Bật/tắt profiler

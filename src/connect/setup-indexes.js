@@ -1,5 +1,19 @@
 const mysql = require('mysql2');
-require('dotenv').config();
+const path = require('path');
+const dotenv = require('dotenv');
+const ENV_PROFILE = process.env.ENV_PROFILE; // 'index' | 'non-index'
+const EXPLICIT_ENV = process.env.ENV_FILE;
+let envPath;
+if (EXPLICIT_ENV && EXPLICIT_ENV.length > 0) {
+    envPath = path.isAbsolute(EXPLICIT_ENV) ? EXPLICIT_ENV : path.join(__dirname, EXPLICIT_ENV);
+} else if (ENV_PROFILE === 'index') {
+    envPath = path.join(__dirname, 'index.env');
+} else if (ENV_PROFILE === 'non-index') {
+    envPath = path.join(__dirname, 'non-index.env');
+} else {
+    envPath = path.join(__dirname, '.env');
+}
+dotenv.config({ path: envPath });
 
 // 1. CẤU HÌNH KẾT NỐI (Từ .env)
 const db = mysql.createConnection({
@@ -22,6 +36,8 @@ const sqlCommands = [
     // 2. Index cho bảng HoaDon (Tìm theo nhân viên và ngày lập)
     "CREATE INDEX IX_HoaDon_ID_NhanVien ON HoaDon(ID_NhanVien)",
     "CREATE INDEX IX_HoaDon_NgayLap ON HoaDon(NgayLap)",
+    // Index composite: Tìm nhanh hóa đơn của user A, đã sắp xếp sẵn theo ngày giảm dần
+    "CREATE INDEX IDX_HoaDon_User_Date ON HoaDon(ID_TaiKhoan, NgayLap DESC)",
 
     // 3. Index cho bảng DichVu_TiemPhong (Tìm theo thú cưng và ngày tiêm)
     "CREATE INDEX IX_DichVu_TiemPhong_ID_ThuCung ON DichVu_TiemPhong(ID_ThuCung)",

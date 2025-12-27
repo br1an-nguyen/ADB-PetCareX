@@ -20,11 +20,17 @@ exports.getAllThuCung = async (req, res) => {
                 L.TenLoai,
                 TKTN.HoTen as TenChuSoHuu,
                 TKTN.Phone as SDTChuSoHuu
-            FROM ThuCung TC
+            FROM (
+                SELECT ID_ThuCung 
+                FROM ThuCung 
+                ORDER BY ID_ThuCung 
+                LIMIT ? OFFSET ?
+            ) as PageTC
+            JOIN ThuCung TC ON PageTC.ID_ThuCung = TC.ID_ThuCung
             LEFT JOIN Giong G ON TC.ID_Giong = G.ID_Giong
             LEFT JOIN Loai L ON G.ID_Loai = L.ID_Loai
             LEFT JOIN TaiKhoanThanhVien TKTN ON TC.ID_TaiKhoan = TKTN.ID_TaiKhoan
-            LIMIT ? OFFSET ?
+            ORDER BY TC.ID_ThuCung
         `;
         const [rows] = await db.executeQuery(query, [limit, offset], 'ThuCung.list');
         
@@ -54,15 +60,16 @@ exports.getThuCungByOwner = async (req, res) => {
         const { ownerId } = req.params;
         const query = `
             SELECT 
-                TC.*, 
+                TC.ID_ThuCung, TC.TenThuCung, TC.NgaySinh, TC.GioiTinh, TC.TinhTrangSucKhoe,
                 G.TenGiong, 
                 L.TenLoai
             FROM ThuCung TC
             LEFT JOIN Giong G ON TC.ID_Giong = G.ID_Giong
             LEFT JOIN Loai L ON G.ID_Loai = L.ID_Loai
             WHERE TC.ID_TaiKhoan = ?
+            ORDER BY TC.ID_ThuCung
         `;
-        const [rows] = await db.query(query, [ownerId]);
+        const [rows] = await db.executeQuery(query, [ownerId], 'ThuCung.byOwner');
         res.json({
             success: true,
             data: rows
@@ -95,7 +102,7 @@ exports.getThuCungById = async (req, res) => {
             LEFT JOIN TaiKhoanThanhVien TKTN ON TC.ID_TaiKhoan = TKTN.ID_TaiKhoan
             WHERE TC.ID_ThuCung = ?
         `;
-        const [rows] = await db.query(query, [id]);
+        const [rows] = await db.executeQuery(query, [id], 'ThuCung.detail');
         
         if (rows.length === 0) {
             return res.status(404).json({

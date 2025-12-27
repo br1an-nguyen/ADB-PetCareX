@@ -20,12 +20,20 @@ exports.getAllKhachHang = async (req, res) => {
                 TKTN.Phone,
                 TKTN.Email,
                 CDT.TenCapDo,
-                COUNT(TC.ID_ThuCung) as SoLuongThuCung
-            FROM TaiKhoanThanhVien TKTN
+                -- Subquery chỉ chạy cho những dòng được hiển thị (Correlated Subquery)
+                -- Khi chưa có Index: Vẫn chậm nhưng đỡ hơn GROUP BY toàn bảng.
+                -- Khi có Index: Cực nhanh vì nó chỉ lookup vài lần.
+                (SELECT COUNT(*) FROM ThuCung TC WHERE TC.ID_TaiKhoan = TKTN.ID_TaiKhoan) as SoLuongThuCung
+            FROM (
+                -- Lọc danh sách ID trước
+                SELECT ID_TaiKhoan 
+                FROM TaiKhoanThanhVien 
+                ORDER BY ID_TaiKhoan 
+                LIMIT ? OFFSET ?
+            ) as PageUser
+            JOIN TaiKhoanThanhVien TKTN ON PageUser.ID_TaiKhoan = TKTN.ID_TaiKhoan
             LEFT JOIN CapDoThanhVien CDT ON TKTN.ID_CapDo = CDT.ID_CapDo
-            LEFT JOIN ThuCung TC ON TKTN.ID_TaiKhoan = TC.ID_TaiKhoan
-            GROUP BY TKTN.ID_TaiKhoan, TKTN.HoTen, TKTN.Phone, TKTN.Email, CDT.TenCapDo
-            LIMIT ? OFFSET ?
+            ORDER BY TKTN.ID_TaiKhoan
         `;
         const [rows] = await db.executeQuery(query, [limit, offset], 'KhachHang.list');
         
@@ -55,14 +63,21 @@ exports.getKhachHangById = async (req, res) => {
         const { id } = req.params;
         const query = `
             SELECT 
-                TKTN.*,
+                TKTN.ID_TaiKhoan,
+                TKTN.HoTen,
+                TKTN.Phone,
+                TKTN.Email,
+                TKTN.DiaChi,
+                TKTN.NgaySinh,
+                TKTN.DiemTichLuy, -- Quan trọng để tính toán logic
+                TKTN.NgayDangKy,
                 CDT.TenCapDo,
                 CDT.MucChietKhau
             FROM TaiKhoanThanhVien TKTN
             LEFT JOIN CapDoThanhVien CDT ON TKTN.ID_CapDo = CDT.ID_CapDo
             WHERE TKTN.ID_TaiKhoan = ?
         `;
-        const [rows] = await db.query(query, [id]);
+        const [rows] = await db.executeQuery(query, [id], 'KhachHang.detail');
         
         if (rows.length === 0) {
             return res.status(404).json({
