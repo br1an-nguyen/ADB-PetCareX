@@ -16,6 +16,10 @@ const thuCungRoutes = require('./routes/thucung.routes');
 const khachHangRoutes = require('./routes/khachhang.routes');
 const hoaDonRoutes = require('./routes/hoadon.routes');
 const dichVuRoutes = require('./routes/dichvu.routes');
+const productsRoutes = require('./routes/products.routes');
+const appointmentsRoutes = require('./routes/appointments.routes');
+const statsRoutes = require('./routes/stats.routes');
+const giongRoutes = require('./routes/giong.routes');
 
 // Routes
 app.use('/api/chinhanh', chiNhanhRoutes);
@@ -23,6 +27,10 @@ app.use('/api/thucung', thuCungRoutes);
 app.use('/api/khachhang', khachHangRoutes);
 app.use('/api/hoadon', hoaDonRoutes);
 app.use('/api/dichvu', dichVuRoutes);
+app.use('/api/products', productsRoutes);
+app.use('/api/appointments', appointmentsRoutes);
+app.use('/api/stats', statsRoutes);
+app.use('/api/giong', giongRoutes);
 
 // Root route
 app.get('/', (req, res) => {
@@ -34,7 +42,11 @@ app.get('/', (req, res) => {
             thuCung: '/api/thucung',
             khachHang: '/api/khachhang',
             hoaDon: '/api/hoadon',
-            dichVu: '/api/dichvu'
+            dichVu: '/api/dichvu',
+            products: '/api/products',
+            appointments: '/api/appointments',
+            stats: '/api/stats',
+            giong: '/api/giong'
         }
     });
 });
