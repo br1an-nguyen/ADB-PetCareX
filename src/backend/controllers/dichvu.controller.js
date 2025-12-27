@@ -3,7 +3,11 @@ const db = require('../config/database');
 // Lấy danh sách dịch vụ
 exports.getAllDichVu = async (req, res) => {
     try {
-        const [rows] = await db.query('SELECT * FROM DichVu');
+        const [rows] = await db.executeQuery(
+            'SELECT ID_DichVu, Ten_DichVu, Loai_DichVu, MoTa FROM DichVu ORDER BY ID_DichVu',
+            [],
+            'DichVu.list'
+        );
         res.json({
             success: true,
             data: rows
@@ -24,13 +28,17 @@ exports.getDichVuByChiNhanh = async (req, res) => {
         const { chinanhId } = req.params;
         const query = `
             SELECT 
-                DV.*,
-                CNDV.DonGia as GiaTaiChiNhanh
+                DV.ID_DichVu,
+                DV.Ten_DichVu,
+                DV.Loai_DichVu,
+                DV.MoTa,
+                CNDV.Gia_DichVu as GiaTaiChiNhanh
             FROM ChiNhanh_DichVu CNDV
-            JOIN DichVu DV ON CNDV.ID_DichVu = DV.ID_DichVu
+            INNER JOIN DichVu DV ON CNDV.ID_DichVu = DV.ID_DichVu
             WHERE CNDV.ID_ChiNhanh = ?
+            ORDER BY DV.ID_DichVu
         `;
-        const [rows] = await db.query(query, [chinanhId]);
+        const [rows] = await db.executeQuery(query, [chinanhId], 'DichVu.byBranch');
         res.json({
             success: true,
             data: rows

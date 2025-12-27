@@ -13,7 +13,11 @@ exports.getAllChiNhanh = async (req, res) => {
         const [[{ total }]] = await db.executeQuery(countQuery, [], 'ChiNhanh.count');
         
         // Query lấy dữ liệu với phân trang
-        const [rows] = await db.executeQuery('SELECT * FROM ChiNhanh LIMIT ? OFFSET ?', [limit, offset], 'ChiNhanh.list');
+        const [rows] = await db.executeQuery(
+            'SELECT ID_ChiNhanh, Ten_ChiNhanh, SDT, DiaChi_ChiNhanh, GioMoCua, GioDongCua FROM ChiNhanh ORDER BY ID_ChiNhanh LIMIT ? OFFSET ?',
+            [limit, offset],
+            'ChiNhanh.list'
+        );
         
         res.json({
             success: true,
@@ -39,7 +43,18 @@ exports.getAllChiNhanh = async (req, res) => {
 exports.getChiNhanhById = async (req, res) => {
     try {
         const { id } = req.params;
-        const [rows] = await db.query('SELECT * FROM ChiNhanh WHERE ID_ChiNhanh = ?', [id]);
+        const query = `
+            SELECT 
+                ID_ChiNhanh,
+                Ten_ChiNhanh,
+                SDT,
+                DiaChi_ChiNhanh,
+                GioMoCua,
+                GioDongCua
+            FROM ChiNhanh 
+            WHERE ID_ChiNhanh = ?
+        `;
+        const [rows] = await db.executeQuery(query, [id], 'ChiNhanh.detail');
         
         if (rows.length === 0) {
             return res.status(404).json({

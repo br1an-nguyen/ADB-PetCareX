@@ -1,6 +1,28 @@
 const readline = require('readline');
 const mysql = require('mysql2');
-require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+const dotenv = require('dotenv');
+const ENV_PROFILE = process.env.ENV_PROFILE; // 'index' | 'non-index'
+const EXPLICIT_ENV = process.env.ENV_FILE;
+let envPath;
+if (EXPLICIT_ENV && EXPLICIT_ENV.length > 0) {
+    envPath = path.isAbsolute(EXPLICIT_ENV) ? EXPLICIT_ENV : path.join(__dirname, EXPLICIT_ENV);
+} else if (ENV_PROFILE === 'index') {
+    envPath = path.join(__dirname, 'index.env');
+} else if (ENV_PROFILE === 'non-index') {
+    envPath = path.join(__dirname, 'non-index.env');
+} else {
+    envPath = path.join(__dirname, '.env');
+}
+dotenv.config({ path: envPath });
+// Log env selection and target DB (không in password)
+const selectedBy = EXPLICIT_ENV && EXPLICIT_ENV.length > 0
+    ? `ENV_FILE (${EXPLICIT_ENV})`
+    : (ENV_PROFILE ? `ENV_PROFILE (${ENV_PROFILE})` : 'default .env');
+console.log(`🔧 Đang dùng env: ${selectedBy}`);
+console.log(`📄 Đường dẫn env: ${envPath}`);
+console.log(`🗄️ DB target: ${process.env.DB_USER}@${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`);
 
 // 1. Cấu hình kết nối (Từ .env)
 const db = mysql.createConnection({
@@ -15,7 +37,7 @@ const db = mysql.createConnection({
 async function importBatTu() {
     const duongDanFile = 'data.sql'; 
 
-    console.log(`C:\Users\Acer\source\repos\Nam3_ki1\ADB\test`);
+    // Bắt đầu nhập từ file data.sql ở cùng thư mục
     console.log(`🛡️ Chế độ: Tự động BỎ QUA dữ liệu trùng lặp...`);
 
     const promiseDb = db.promise();
