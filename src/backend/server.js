@@ -16,6 +16,7 @@ const thuCungRoutes = require('./routes/thucung.routes');
 const khachHangRoutes = require('./routes/khachhang.routes');
 const hoaDonRoutes = require('./routes/hoadon.routes');
 const dichVuRoutes = require('./routes/dichvu.routes');
+const staffRoutes = require('./routes/staff.routes');
 
 // Routes
 app.use('/api/chinhanh', chiNhanhRoutes);
@@ -23,6 +24,7 @@ app.use('/api/thucung', thuCungRoutes);
 app.use('/api/khachhang', khachHangRoutes);
 app.use('/api/hoadon', hoaDonRoutes);
 app.use('/api/dichvu', dichVuRoutes);
+app.use('/api/staff', staffRoutes);
 
 // Root route
 app.get('/', (req, res) => {

@@ -7,11 +7,11 @@ exports.getAllKhachHang = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 20;
         const offset = (page - 1) * limit;
-        
+
         // Query đếm tổng số - Profiler tự động log
         const countQuery = `SELECT COUNT(*) as total FROM TaiKhoanThanhVien`;
         const [[{ total }]] = await db.executeQuery(countQuery, [], 'KhachHang.count');
-        
+
         // Query lấy dữ liệu với phân trang
         const query = `
             SELECT 
@@ -36,7 +36,7 @@ exports.getAllKhachHang = async (req, res) => {
             ORDER BY TKTN.ID_TaiKhoan
         `;
         const [rows] = await db.executeQuery(query, [limit, offset], 'KhachHang.list');
-        
+
         res.json({
             success: true,
             data: rows,
@@ -78,14 +78,14 @@ exports.getKhachHangById = async (req, res) => {
             WHERE TKTN.ID_TaiKhoan = ?
         `;
         const [rows] = await db.executeQuery(query, [id], 'KhachHang.detail');
-        
+
         if (rows.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: 'Không tìm thấy khách hàng'
             });
         }
-        
+
         res.json({
             success: true,
             data: rows[0]
