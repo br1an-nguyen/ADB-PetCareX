@@ -68,7 +68,7 @@ function LandingPage() {
                 </div>
 
                 <div style={{ marginTop: 'var(--spacing-2xl)', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                    <p>© 2024 PetCareX - Hệ thống phòng khám thú cưng</p>
+                    <p>© ADB#9 - PetCareX - Hệ thống phòng khám thú cưng</p>
                 </div>
             </div>
         </div>

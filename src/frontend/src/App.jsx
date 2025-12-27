@@ -6,6 +6,18 @@ import StaffDashboard from './pages/staff/StaffDashboard'
 import CustomerLookup from './pages/staff/CustomerLookup'
 import WalkinBooking from './pages/staff/WalkinBooking'
 import InvoiceLookup from './pages/staff/InvoiceLookup'
+import ManagerDashboard from './pages/manager/ManagerDashboard'
+import RevenueReport from './pages/manager/RevenueReport'
+import DoctorPerformance from './pages/manager/DoctorPerformance'
+import DoctorDashboard from './pages/doctor/DoctorDashboard'
+import ExaminationForm from './pages/doctor/ExaminationForm'
+import MedicineSearch from './pages/doctor/MedicineSearch'
+import PetRecordLookup from './pages/doctor/PetRecordLookup'
+import CustomerDashboard from './pages/customer/CustomerDashboard'
+import ProductSearch from './pages/customer/ProductSearch'
+import ExamHistory from './pages/customer/ExamHistory'
+import OnlineBooking from './pages/customer/OnlineBooking'
+import DoctorSchedule from './pages/customer/DoctorSchedule'
 
 function App() {
     return (
@@ -21,14 +33,23 @@ function App() {
                     <Route path="/staff/walkin-booking" element={<WalkinBooking />} />
                     <Route path="/staff/invoice-lookup" element={<InvoiceLookup />} />
 
-                    {/* Customer Routes (placeholder) */}
-                    <Route path="/customer" element={<PlaceholderPage title="Khách hàng" />} />
+                    {/* Customer Routes */}
+                    <Route path="/customer" element={<CustomerDashboard />} />
+                    <Route path="/customer/products" element={<ProductSearch />} />
+                    <Route path="/customer/history" element={<ExamHistory />} />
+                    <Route path="/customer/doctors" element={<DoctorSchedule />} />
+                    <Route path="/customer/booking" element={<OnlineBooking />} />
 
-                    {/* Doctor Routes (placeholder) */}
-                    <Route path="/doctor" element={<PlaceholderPage title="Bác sĩ" />} />
+                    {/* Doctor Routes */}
+                    <Route path="/doctor" element={<DoctorDashboard />} />
+                    <Route path="/doctor/examination/:phieuKhamId" element={<ExaminationForm />} />
+                    <Route path="/doctor/medicine" element={<MedicineSearch />} />
+                    <Route path="/doctor/pet-records" element={<PetRecordLookup />} />
 
-                    {/* Manager Routes (placeholder) */}
-                    <Route path="/manager" element={<PlaceholderPage title="Quản lý" />} />
+                    {/* Manager Routes */}
+                    <Route path="/manager" element={<ManagerDashboard />} />
+                    <Route path="/manager/revenue" element={<RevenueReport />} />
+                    <Route path="/manager/doctor-performance" element={<DoctorPerformance />} />
 
                     {/* Fallback */}
                     <Route path="*" element={<Navigate to="/" replace />} />

@@ -17,6 +17,9 @@ const khachHangRoutes = require('./routes/khachhang.routes');
 const hoaDonRoutes = require('./routes/hoadon.routes');
 const dichVuRoutes = require('./routes/dichvu.routes');
 const staffRoutes = require('./routes/staff.routes');
+const managerRoutes = require('./routes/manager.routes');
+const doctorRoutes = require('./routes/doctor.routes');
+const customerRoutes = require('./routes/customer.routes');
 
 // Routes
 app.use('/api/chinhanh', chiNhanhRoutes);
@@ -25,6 +28,9 @@ app.use('/api/khachhang', khachHangRoutes);
 app.use('/api/hoadon', hoaDonRoutes);
 app.use('/api/dichvu', dichVuRoutes);
 app.use('/api/staff', staffRoutes);
+app.use('/api/manager', managerRoutes);
+app.use('/api/doctor', doctorRoutes);
+app.use('/api/customer', customerRoutes);
 
 // Root route
 app.get('/', (req, res) => {
