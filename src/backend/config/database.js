@@ -46,15 +46,15 @@ const profiledQuery = async (sql, params = []) => {
     const queryId = Math.random().toString(36).substring(7);
     const startTime = performance.now();
     const timestamp = new Date().toLocaleTimeString('vi-VN');
-    
+
     // Format SQL để hiển thị đẹp hơn
     const formattedSQL = sql.replace(/\s+/g, ' ').trim().substring(0, 200);
     const queryType = sql.trim().split(' ')[0].toUpperCase();
-    
+
     console.log(`${LOG_COLORS.dim}─────────────────────────────────────────────────────${LOG_COLORS.reset}`);
     console.log(`${LOG_COLORS.cyan}🔍 [${timestamp}] Query #${queryId}${LOG_COLORS.reset}`);
     console.log(`${LOG_COLORS.bright}   ${queryType}${LOG_COLORS.reset} ${LOG_COLORS.dim}${formattedSQL}${formattedSQL.length >= 200 ? '...' : ''}${LOG_COLORS.reset}`);
-    
+
     if (params && params.length > 0) {
         console.log(`${LOG_COLORS.dim}   Params: [${params.join(', ')}]${LOG_COLORS.reset}`);
     }
@@ -63,7 +63,7 @@ const profiledQuery = async (sql, params = []) => {
         const result = await promisePool.query(sql, params);
         const endTime = performance.now();
         const duration = (endTime - startTime).toFixed(2);
-        
+
         // Xác định màu dựa trên thời gian
         let timeColor = LOG_COLORS.green;
         let timeIcon = '✅';
@@ -74,16 +74,16 @@ const profiledQuery = async (sql, params = []) => {
             timeColor = LOG_COLORS.yellow;
             timeIcon = '⚠️';
         }
-        
+
         const rowCount = Array.isArray(result[0]) ? result[0].length : 0;
         console.log(`${timeColor}   ${timeIcon} ${duration}ms | ${rowCount} rows${LOG_COLORS.reset}`);
-        
+
         return result;
-        
+
     } catch (error) {
         const endTime = performance.now();
         const duration = (endTime - startTime).toFixed(2);
-        
+
         console.log(`${LOG_COLORS.red}   ❌ ERROR after ${duration}ms: ${error.message}${LOG_COLORS.reset}`);
         throw error;
     }
@@ -95,10 +95,10 @@ const profiledQuery = async (sql, params = []) => {
 const db = {
     // Query với profiler
     query: profiledQuery,
-    
+
     // Execute (alias của query)
     execute: profiledQuery,
-    
+
     /**
      * Helper function executeQuery - Gọi query với profiler tự động
      * Đây là hàm chính để tất cả controllers sử dụng (DRY principle)
@@ -113,27 +113,27 @@ const db = {
         }
         return profiledQuery(sql, params);
     },
-    
+
     // Truy cập pool gốc nếu cần
     pool: promisePool,
-    
+
     // Lấy connection từ pool (cho transactions)
     getConnection: () => promisePool.getConnection(),
-    
+
     // Helper: Bắt đầu transaction với profiler
     async transaction(callback) {
         const connection = await promisePool.getConnection();
         const startTime = performance.now();
         console.log(`${LOG_COLORS.cyan}🔄 [Transaction] Started${LOG_COLORS.reset}`);
-        
+
         try {
             await connection.beginTransaction();
             const result = await callback(connection);
             await connection.commit();
-            
+
             const duration = (performance.now() - startTime).toFixed(2);
             console.log(`${LOG_COLORS.green}✅ [Transaction] Committed (${duration}ms)${LOG_COLORS.reset}`);
-            
+
             return result;
         } catch (error) {
             await connection.rollback();
