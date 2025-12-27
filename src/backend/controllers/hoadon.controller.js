@@ -7,11 +7,11 @@ exports.getAllHoaDon = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 20;
         const offset = (page - 1) * limit;
-        
+
         // Query đếm tổng số - Profiler tự động log
         const countQuery = `SELECT COUNT(*) as total FROM HoaDon`;
         const [[{ total }]] = await db.executeQuery(countQuery, [], 'HoaDon.count');
-        
+
         // Query lấy dữ liệu với phân trang
         const query = `
             SELECT 
@@ -39,7 +39,7 @@ exports.getAllHoaDon = async (req, res) => {
             ORDER BY HD.NgayLap DESC
         `;
         const [rows] = await db.executeQuery(query, [limit, offset], 'HoaDon.list');
-        
+
         res.json({
             success: true,
             data: rows,
@@ -65,21 +65,18 @@ exports.getAllHoaDon = async (req, res) => {
 exports.getHoaDonById = async (req, res) => {
     try {
         const { id } = req.params;
-        const query = `
+
+        // Query 1: Thông tin cơ bản của hóa đơn
+        const invoiceQuery = `
             SELECT 
                 HD.ID_HoaDon,
                 HD.NgayLap,
                 HD.TongTien,
-                HD.GhiChu,
-                HD.TrangThai,
-                -- Thông tin khách hàng (Snapshot tại thời điểm query)
+                HD.KhuyenMai,
                 TKTN.HoTen as TenKhachHang,
                 TKTN.Phone as SDTKhachHang,
-                -- Thông tin nhân viên & Chi nhánh
                 NV.HoTen as TenNhanVien,
                 CN.Ten_ChiNhanh,
-                CN.DiaChi_ChiNhanh,
-                -- Hình thức thanh toán
                 HT.TenHinhThuc as HinhThucThanhToan
             FROM HoaDon HD
             LEFT JOIN TaiKhoanThanhVien TKTN ON HD.ID_TaiKhoan = TKTN.ID_TaiKhoan
@@ -88,18 +85,55 @@ exports.getHoaDonById = async (req, res) => {
             LEFT JOIN HinhThucThanhToan HT ON HD.ID_HinhThucTT = HT.ID_HinhThuc
             WHERE HD.ID_HoaDon = ?
         `;
-        const [rows] = await db.executeQuery(query, [id], 'HoaDon.detail');
-        
-        if (rows.length === 0) {
+        const [invoiceRows] = await db.executeQuery(invoiceQuery, [id], 'HoaDon.detail');
+
+        if (invoiceRows.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: 'Không tìm thấy hóa đơn'
             });
         }
-        
+
+        // Query 2: Chi tiết sản phẩm đã mua
+        const productsQuery = `
+            SELECT 
+                SP.TenSanPham,
+                MH.SoLuong,
+                SP.GiaBan as DonGia,
+                (MH.SoLuong * SP.GiaBan) as ThanhTien,
+                LSP.TenLoaiSP as LoaiSanPham
+            FROM DichVu_MuaHang MH
+            JOIN SanPham SP ON MH.ID_SanPham = SP.ID_SanPham
+            LEFT JOIN Loai_SanPham LSP ON SP.ID_LoaiSP = LSP.ID_LoaiSP
+            WHERE MH.ID_HoaDon = ?
+        `;
+        const [productRows] = await db.executeQuery(productsQuery, [id], 'HoaDon.products');
+
+        // Query 3: Chi tiết dịch vụ khám
+        const servicesQuery = `
+            SELECT 
+                DV.Ten_DichVu as TenDichVu,
+                DV.Loai_DichVu as LoaiDichVu,
+                CNDV.Gia_DichVu as DonGia,
+                TC.TenThuCung,
+                PK.TrangThai,
+                PK.NgayDangKy
+            FROM PhieuKham PK
+            JOIN ChiNhanh_DichVu CNDV ON PK.ID_DichVu = CNDV.ID_DichVuDuocDung
+            JOIN DichVu DV ON CNDV.ID_DichVu = DV.ID_DichVu
+            LEFT JOIN ThuCung TC ON PK.ID_ThuCung = TC.ID_ThuCung
+            WHERE PK.ID_HoaDon = ?
+        `;
+        const [serviceRows] = await db.executeQuery(servicesQuery, [id], 'HoaDon.services');
+
+        // Kết hợp kết quả
+        const invoice = invoiceRows[0];
+        invoice.sanPham = productRows;
+        invoice.dichVu = serviceRows;
+
         res.json({
             success: true,
-            data: rows[0]
+            data: invoice
         });
     } catch (error) {
         console.error('Error:', error);
@@ -124,7 +158,6 @@ exports.getHoaDonByCustomer = async (req, res) => {
                 HD.ID_HoaDon,
                 HD.NgayLap,
                 HD.TongTien,
-                HD.TrangThai,
                 NV.HoTen as TenNhanVien,
                 CN.Ten_ChiNhanh
             FROM HoaDon HD
