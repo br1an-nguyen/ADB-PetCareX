@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import NotificationToast from '../../components/common/NotificationToast'
+import ConfirmModal from '../../components/common/ConfirmModal'
 
 const API_URL = 'http://localhost:5000/api'
 const ITEMS_PER_PAGE = 10
@@ -14,20 +16,92 @@ function CustomerLookup() {
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1)
 
+    // Modal đăng ký khách hàng mới
+    const [showCustomerModal, setShowCustomerModal] = useState(false)
+    const [creatingCustomer, setCreatingCustomer] = useState(false)
+    const [customerForm, setCustomerForm] = useState({
+        HoTen: '',
+        Phone: '',
+        Email: '',
+        CCCD: '',
+        GioiTinh: 'Nam',
+        NgaySinh: ''
+    })
+
+    // Modal thêm thú cưng
+    const [showPetModal, setShowPetModal] = useState(false)
+    const [creatingPet, setCreatingPet] = useState(false)
+    const [newlyCreatedCustomer, setNewlyCreatedCustomer] = useState(null)
+    const [loaiList, setLoaiList] = useState([])
+    const [giongList, setGiongList] = useState([])
+    const [petForm, setPetForm] = useState({
+        TenThuCung: '',
+        TenLoai: '',
+        TenGiong: '',
+        GioiTinh: 'Đực',
+        NgaySinh: '',
+        TinhTrangSucKhoe: 'Bình thường'
+    })
+
+    // UI Notification state
+    const [notification, setNotification] = useState({ show: false, message: '', type: 'success' })
+    const [confirmModal, setConfirmModal] = useState({ show: false, message: '', onConfirm: null, customer: null })
+
+    // Helper function to show notification
+    const showNotification = (message, type = 'success') => {
+        setNotification({ show: true, message, type })
+    }
+
+    // Load loài khi mount
+    useEffect(() => {
+        loadLoaiList()
+    }, [])
+
+    // Load giống khi chọn loài
+    useEffect(() => {
+        if (petForm.TenLoai) {
+            loadGiongList(petForm.TenLoai)
+        }
+    }, [petForm.TenLoai])
+
+    const loadLoaiList = async () => {
+        try {
+            const res = await fetch(`${API_URL}/thucung/loai`)
+            const data = await res.json()
+            if (data.success) {
+                setLoaiList(data.data)
+            }
+        } catch (err) {
+            console.error('Load loai error:', err)
+        }
+    }
+
+    const loadGiongList = async (tenLoai) => {
+        try {
+            const res = await fetch(`${API_URL}/thucung/giong?loai=${encodeURIComponent(tenLoai)}`)
+            const data = await res.json()
+            if (data.success) {
+                setGiongList(data.data)
+                setPetForm(prev => ({ ...prev, TenGiong: '' }))
+            }
+        } catch (err) {
+            console.error('Load giong error:', err)
+        }
+    }
+
     const handleSearch = async (e) => {
-        e.preventDefault()
+        if (e) e.preventDefault()
         if (!searchQuery.trim()) return
 
         setLoading(true)
         setSearched(true)
-        setCurrentPage(1) // Reset to page 1 on new search
+        setCurrentPage(1)
 
         try {
             const response = await fetch(`${API_URL}/staff/lookup?query=${encodeURIComponent(searchQuery)}`)
             const data = await response.json()
 
             if (data.success) {
-                // Group by customer
                 const customersMap = new Map()
                 data.data.forEach(row => {
                     if (!customersMap.has(row.ID_TaiKhoan)) {
@@ -60,6 +134,134 @@ function CustomerLookup() {
         }
     }
 
+    const handleCreateCustomer = async () => {
+        if (!customerForm.HoTen || !customerForm.Phone) {
+            showNotification('Vui lòng điền Họ tên và Số điện thoại', 'error')
+            return
+        }
+
+        setCreatingCustomer(true)
+        try {
+            const res = await fetch(`${API_URL}/staff/register-customer`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(customerForm)
+            })
+            const data = await res.json()
+
+            if (data.success) {
+                setShowCustomerModal(false)
+
+                // Tìm kiếm lại khách hàng vừa tạo
+                setSearchQuery(customerForm.Phone)
+                const searchRes = await fetch(`${API_URL}/staff/lookup?query=${encodeURIComponent(customerForm.Phone)}`)
+                const searchData = await searchRes.json()
+
+                if (searchData.success && searchData.data.length > 0) {
+                    const newCustomerRaw = searchData.data.find(c => c.Phone === customerForm.Phone) || searchData.data[0]
+                    const newCustomer = {
+                        id: newCustomerRaw.ID_TaiKhoan,
+                        name: newCustomerRaw.TenChu || newCustomerRaw.HoTen,
+                        phone: newCustomerRaw.Phone,
+                        memberLevel: newCustomerRaw.TenCapDo || 'Cơ bản',
+                        pets: []
+                    }
+
+                    // Hỏi có muốn thêm thú cưng không
+                    setNewlyCreatedCustomer(newCustomer)
+                    setSearched(true)
+                    setResults([newCustomer])
+
+                    // Hiển thị modal xác nhận thêm thú cưng
+                    setConfirmModal({
+                        show: true,
+                        message: 'Đăng ký khách hàng thành công! Bạn có muốn thêm thú cưng cho khách hàng này không?',
+                        onConfirm: () => openPetModal(newCustomer),
+                        customer: newCustomer
+                    })
+                }
+
+                // Reset form
+                setCustomerForm({
+                    HoTen: '',
+                    Phone: '',
+                    Email: '',
+                    CCCD: '',
+                    GioiTinh: 'Nam',
+                    NgaySinh: ''
+                })
+            } else {
+                showNotification(data.message || 'Có lỗi xảy ra', 'error')
+            }
+        } catch (err) {
+            console.error('Create customer error:', err)
+            showNotification('Không thể kết nối server', 'error')
+        } finally {
+            setCreatingCustomer(false)
+        }
+    }
+
+    const openPetModal = (customer) => {
+        setNewlyCreatedCustomer(customer)
+        setPetForm({
+            TenThuCung: '',
+            TenLoai: loaiList.length > 0 ? loaiList[0].TenLoai : '',
+            TenGiong: '',
+            GioiTinh: 'Đực',
+            NgaySinh: '',
+            TinhTrangSucKhoe: 'Bình thường'
+        })
+        setShowPetModal(true)
+    }
+
+    const handleCreatePet = async () => {
+        if (!petForm.TenThuCung || !petForm.TenLoai || !petForm.TenGiong) {
+            showNotification('Vui lòng điền đầy đủ thông tin bắt buộc', 'error')
+            return
+        }
+
+        setCreatingPet(true)
+        try {
+            const res = await fetch(`${API_URL}/thucung`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...petForm,
+                    ID_TaiKhoan: newlyCreatedCustomer.id
+                })
+            })
+            const data = await res.json()
+
+            if (data.success) {
+                setShowPetModal(false)
+                showNotification('Thêm thú cưng thành công!', 'success')
+
+                // Tìm kiếm lại để cập nhật danh sách thú cưng
+                setSearchQuery(newlyCreatedCustomer.phone)
+                await handleSearch()
+            } else {
+                showNotification(data.message || 'Có lỗi xảy ra', 'error')
+            }
+        } catch (err) {
+            console.error('Create pet error:', err)
+            showNotification('Không thể kết nối server', 'error')
+        } finally {
+            setCreatingPet(false)
+        }
+    }
+
+    const openCustomerModal = () => {
+        setCustomerForm({
+            HoTen: '',
+            Phone: searchQuery,
+            Email: '',
+            CCCD: '',
+            GioiTinh: 'Nam',
+            NgaySinh: ''
+        })
+        setShowCustomerModal(true)
+    }
+
     // Pagination calculations
     const totalPages = Math.ceil(results.length / ITEMS_PER_PAGE)
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
@@ -72,7 +274,6 @@ function CustomerLookup() {
         }
     }
 
-    // Generate page numbers to display
     const getPageNumbers = () => {
         const pages = []
         const maxVisiblePages = 5
@@ -158,6 +359,14 @@ function CustomerLookup() {
                             <button type="submit" className="btn btn-primary" disabled={loading} style={{ height: 'fit-content' }}>
                                 {loading ? '⏳ Đang tìm...' : '🔍 Tìm kiếm'}
                             </button>
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={openCustomerModal}
+                                style={{ height: 'fit-content' }}
+                            >
+                                ➕ Khách mới
+                            </button>
                         </form>
                     </div>
 
@@ -172,7 +381,14 @@ function CustomerLookup() {
                         <div className="empty-state">
                             <div className="empty-icon">🔍</div>
                             <h3>Không tìm thấy kết quả</h3>
-                            <p>Thử tìm kiếm với từ khóa khác</p>
+                            <p>Không tìm thấy khách hàng với thông tin "{searchQuery}"</p>
+                            <button
+                                className="btn btn-primary"
+                                onClick={openCustomerModal}
+                                style={{ marginTop: 'var(--spacing-md)' }}
+                            >
+                                ➕ Đăng ký khách hàng mới
+                            </button>
                         </div>
                     )}
 
@@ -218,17 +434,25 @@ function CustomerLookup() {
                                                         ))}
                                                     </div>
                                                 ) : (
-                                                    <span style={{ color: 'var(--text-muted)' }}>Chưa có</span>
+                                                    <button
+                                                        className="btn btn-ghost"
+                                                        onClick={() => openPetModal(customer)}
+                                                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                                    >
+                                                        ➕ Thêm
+                                                    </button>
                                                 )}
                                             </td>
                                             <td>
-                                                <button
-                                                    className="btn btn-secondary"
-                                                    onClick={() => setSelectedCustomer(customer)}
-                                                    style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}
-                                                >
-                                                    Xem chi tiết
-                                                </button>
+                                                <div style={{ display: 'flex', gap: '4px' }}>
+                                                    <button
+                                                        className="btn btn-secondary"
+                                                        onClick={() => setSelectedCustomer(customer)}
+                                                        style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}
+                                                    >
+                                                        Chi tiết
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
@@ -311,9 +535,19 @@ function CustomerLookup() {
                                         <span className="badge badge-info">{selectedCustomer.memberLevel}</span>
                                     </div>
 
-                                    <h4 style={{ marginTop: 'var(--spacing-xl)', marginBottom: 'var(--spacing-md)' }}>
-                                        🐾 Danh sách thú cưng ({selectedCustomer.pets.length})
-                                    </h4>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--spacing-xl)', marginBottom: 'var(--spacing-md)' }}>
+                                        <h4>🐾 Danh sách thú cưng ({selectedCustomer.pets.length})</h4>
+                                        <button
+                                            className="btn btn-secondary"
+                                            onClick={() => {
+                                                setSelectedCustomer(null)
+                                                openPetModal(selectedCustomer)
+                                            }}
+                                            style={{ fontSize: '0.8rem' }}
+                                        >
+                                            ➕ Thêm thú cưng
+                                        </button>
+                                    </div>
                                     {selectedCustomer.pets.length > 0 ? (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
                                             {selectedCustomer.pets.map(pet => (
@@ -346,9 +580,222 @@ function CustomerLookup() {
                             </div>
                         </div>
                     )}
+
+                    {/* Modal Đăng ký khách hàng mới */}
+                    {showCustomerModal && (
+                        <div className="modal-overlay" onClick={() => setShowCustomerModal(false)}>
+                            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+                                <div className="modal-header">
+                                    <h2>👤 Đăng ký khách hàng mới</h2>
+                                    <button className="modal-close" onClick={() => setShowCustomerModal(false)}>×</button>
+                                </div>
+                                <div className="modal-body">
+                                    <div className="form-group">
+                                        <label>Họ và tên *</label>
+                                        <input
+                                            type="text"
+                                            placeholder="Nguyễn Văn A"
+                                            value={customerForm.HoTen}
+                                            onChange={e => setCustomerForm({ ...customerForm, HoTen: e.target.value })}
+                                        />
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
+                                        <div className="form-group">
+                                            <label>Số điện thoại *</label>
+                                            <input
+                                                type="text"
+                                                placeholder="0912345678"
+                                                value={customerForm.Phone}
+                                                onChange={e => setCustomerForm({ ...customerForm, Phone: e.target.value })}
+                                            />
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label>CCCD / CMND</label>
+                                            <input
+                                                type="text"
+                                                value={customerForm.CCCD}
+                                                onChange={e => setCustomerForm({ ...customerForm, CCCD: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label>Email</label>
+                                        <input
+                                            type="email"
+                                            placeholder="example@email.com"
+                                            value={customerForm.Email}
+                                            onChange={e => setCustomerForm({ ...customerForm, Email: e.target.value })}
+                                        />
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
+                                        <div className="form-group">
+                                            <label>Giới tính</label>
+                                            <select
+                                                value={customerForm.GioiTinh}
+                                                onChange={e => setCustomerForm({ ...customerForm, GioiTinh: e.target.value })}
+                                            >
+                                                <option value="Nam">Nam</option>
+                                                <option value="Nữ">Nữ</option>
+                                                <option value="Khác">Khác</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label>Ngày sinh</label>
+                                            <input
+                                                type="date"
+                                                value={customerForm.NgaySinh}
+                                                onChange={e => setCustomerForm({ ...customerForm, NgaySinh: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="modal-footer">
+                                    <button className="btn btn-ghost" onClick={() => setShowCustomerModal(false)}>
+                                        Hủy
+                                    </button>
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={handleCreateCustomer}
+                                        disabled={creatingCustomer || !customerForm.HoTen || !customerForm.Phone}
+                                    >
+                                        {creatingCustomer ? '⏳ Đang đăng ký...' : '✅ Đăng ký ngay'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Modal Thêm thú cưng */}
+                    {showPetModal && (
+                        <div className="modal-overlay" onClick={() => setShowPetModal(false)}>
+                            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+                                <div className="modal-header">
+                                    <h2>🐾 Thêm thú cưng mới</h2>
+                                    <button className="modal-close" onClick={() => setShowPetModal(false)}>×</button>
+                                </div>
+                                <div className="modal-body">
+                                    <div style={{ padding: 'var(--spacing-sm)', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--spacing-md)' }}>
+                                        <span style={{ color: 'var(--text-muted)' }}>Khách hàng: </span>
+                                        <strong>{newlyCreatedCustomer?.name}</strong> - {newlyCreatedCustomer?.phone}
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label>Tên thú cưng *</label>
+                                        <input
+                                            type="text"
+                                            placeholder="Nhập tên thú cưng..."
+                                            value={petForm.TenThuCung}
+                                            onChange={e => setPetForm({ ...petForm, TenThuCung: e.target.value })}
+                                        />
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
+                                        <div className="form-group">
+                                            <label>Loài *</label>
+                                            <select
+                                                value={petForm.TenLoai}
+                                                onChange={e => setPetForm({ ...petForm, TenLoai: e.target.value })}
+                                            >
+                                                <option value="">-- Chọn loài --</option>
+                                                {loaiList.map(loai => (
+                                                    <option key={loai.ID_Loai} value={loai.TenLoai}>{loai.TenLoai}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label>Giống *</label>
+                                            <select
+                                                value={petForm.TenGiong}
+                                                onChange={e => setPetForm({ ...petForm, TenGiong: e.target.value })}
+                                                disabled={!petForm.TenLoai}
+                                            >
+                                                <option value="">-- Chọn giống --</option>
+                                                {giongList.map(giong => (
+                                                    <option key={giong.ID_Giong} value={giong.TenGiong}>{giong.TenGiong}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
+                                        <div className="form-group">
+                                            <label>Giới tính</label>
+                                            <select
+                                                value={petForm.GioiTinh}
+                                                onChange={e => setPetForm({ ...petForm, GioiTinh: e.target.value })}
+                                            >
+                                                <option value="Đực">Đực ♂️</option>
+                                                <option value="Cái">Cái ♀️</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label>Ngày sinh</label>
+                                            <input
+                                                type="date"
+                                                value={petForm.NgaySinh}
+                                                onChange={e => setPetForm({ ...petForm, NgaySinh: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label>Tình trạng sức khỏe</label>
+                                        <input
+                                            type="text"
+                                            placeholder="VD: Bình thường, Đang điều trị..."
+                                            value={petForm.TinhTrangSucKhoe}
+                                            onChange={e => setPetForm({ ...petForm, TinhTrangSucKhoe: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="modal-footer">
+                                    <button className="btn btn-ghost" onClick={() => setShowPetModal(false)}>
+                                        Hủy
+                                    </button>
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={handleCreatePet}
+                                        disabled={creatingPet || !petForm.TenThuCung || !petForm.TenLoai || !petForm.TenGiong}
+                                    >
+                                        {creatingPet ? '⏳ Đang tạo...' : '✅ Tạo thú cưng'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
-            </main >
-        </div >
+            </main>
+
+            {/* Notification Toast */}
+            <NotificationToast
+                show={notification.show}
+                message={notification.message}
+                type={notification.type}
+                onClose={() => setNotification(prev => ({ ...prev, show: false }))}
+            />
+
+            {/* Confirm Modal */}
+            <ConfirmModal
+                show={confirmModal.show}
+                title="✅ Thành công"
+                message={confirmModal.message}
+                icon="🎉"
+                confirmText="➕ Thêm thú cưng ngay"
+                cancelText="Để sau"
+                onConfirm={() => {
+                    setConfirmModal(prev => ({ ...prev, show: false }))
+                    if (confirmModal.onConfirm) confirmModal.onConfirm()
+                }}
+                onCancel={() => setConfirmModal(prev => ({ ...prev, show: false }))}
+            />
+        </div>
     )
 }
 
