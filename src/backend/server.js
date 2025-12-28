@@ -1,9 +1,21 @@
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config();
+const path = require('path');
+
+// Chọn file env dựa trên ENV_PROFILE: index → connect/index.env, non-index → connect/non-index.env
+const ENV_PROFILE = process.env.ENV_PROFILE || 'non-index';
+const envFile = ENV_PROFILE === 'index' 
+    ? path.join(__dirname, '..', 'connect', 'index.env')
+    : path.join(__dirname, '..', 'connect', 'non-index.env');
+require('dotenv').config({ path: envFile });
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+
+// Chọn PORT dựa trên ENV_PROFILE: index → 5001, non-index → 5000
+const DEFAULT_PORT = ENV_PROFILE === 'index' ? 5001 : 5000;
+const PORT = process.env.PORT || DEFAULT_PORT;
+
+console.log(`📌 ENV_PROFILE: ${ENV_PROFILE} | Sử dụng: ${path.basename(envFile)}`);
 
 // Middleware
 app.use(cors());
