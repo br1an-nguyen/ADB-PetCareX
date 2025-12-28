@@ -229,35 +229,111 @@ const sqlCommands = [
     END`,
 
     // 11. sp_ThemPhieuTiemPhong
-    `CREATE PROCEDURE sp_ThemPhieuTiemPhong(IN p_ID_HoaDon char(10), IN p_ID_DichVu char(10), IN p_ID_NhanVien char(10), IN p_ID_ThuCung char(10), IN p_ID_LoaiVacxin char(10), IN p_NgayTiem date, IN p_lieuLuong float, IN p_GoiTiem int, IN p_KhuyenMai int)
+    `CREATE PROCEDURE sp_ThemPhieuTiemPhong(
+        IN p_ID_HoaDon char(10),
+        IN p_ID_DichVu char(10),
+        IN p_ID_NhanVien char(10),
+        IN p_ID_ThuCung char(10),
+        IN p_ID_LoaiVacxin char(10),
+        IN p_NgayTiem date,
+        IN p_lieuLuong float,
+        IN p_GoiTiem int,
+        IN p_KhuyenMai int
+    )
     BEGIN
+        -- Handler bắt lỗi trùng lặp (Primary Key) hoặc lỗi hệ thống khác
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            GET DIAGNOSTICS CONDITION 1 @err_msg = MESSAGE_TEXT;
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = @err_msg;
+        END;
+
+        -- 1. Kiểm tra Hóa Đơn
         IF NOT EXISTS (SELECT 1 FROM HoaDon WHERE ID_HoaDon = p_ID_HoaDon) THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Không tìm thấy hóa đơn hợp lệ';
-        ELSEIF NOT EXISTS (SELECT 1 FROM ChiNhanh_DichVu WHERE ID_DichVuDuocDung = p_ID_DichVu) THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Không có dịch vụ phù hợp';
-        ELSEIF NOT EXISTS (SELECT 1 FROM DichVu dv JOIN ChiNhanh_DichVu cn_dv ON dv.ID_DichVu = cn_dv.ID_DichVu WHERE dv.Ten_DichVu = 'Tiêm Phòng' AND cn_dv.ID_DichVuDuocDung = p_ID_DichVu) THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Dịch vụ được chọn không phải dịch vụ tiêm phòng';
-        ELSEIF NOT EXISTS (SELECT 1 FROM ThuCung WHERE ID_ThuCung = p_ID_ThuCung) THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Không tồn tại thú cưng';
-        ELSEIF NOT EXISTS (SELECT 1 FROM Loai_Vacxin WHERE ID_LoaiVacxin = p_ID_LoaiVacxin ) THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Không có loại Vác-xin phù hợp';
-        ELSE
-            INSERT INTO DichVu_TiemPhong(ID_HoaDon, ID_DichVu, ID_NhanVien, ID_ThuCung, ID_LoaiVacxin, NgayTiem, LieuLuong, GoiTiem, KhuyenMai)
-            VALUES (p_ID_HoaDon, p_ID_DichVu, p_ID_NhanVien, p_ID_ThuCung, p_ID_LoaiVacxin, p_NgayTiem, p_lieuLuong, NULL, NULL);
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Lỗi: Không tìm thấy hóa đơn hợp lệ';
         END IF;
+
+        -- 2. Kiểm tra Dịch vụ tại chi nhánh
+        IF NOT EXISTS (SELECT 1 FROM ChiNhanh_DichVu WHERE ID_DichVuDuocDung = p_ID_DichVu) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Lỗi: Không có dịch vụ phù hợp tại chi nhánh';
+        END IF;
+
+        -- 3. Kiểm tra Nhân viên
+        IF NOT EXISTS (SELECT 1 FROM NhanVien WHERE ID_NhanVien = p_ID_NhanVien) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Lỗi: Không tìm thấy nhân viên';
+        END IF;
+
+        -- 4. Kiểm tra đúng là dịch vụ Tiêm Phòng không
+        IF NOT EXISTS (SELECT 1 FROM DichVu dv 
+                       JOIN ChiNhanh_DichVu cn_dv ON dv.ID_DichVu = cn_dv.ID_DichVu
+                       WHERE dv.Ten_DichVu = 'Tiêm Phòng' 
+                       AND cn_dv.ID_DichVuDuocDung = p_ID_DichVu) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Lỗi: Dịch vụ được chọn không phải loại Tiêm Phòng';
+        END IF;
+
+        -- 5. Kiểm tra Thú Cưng
+        IF NOT EXISTS (SELECT 1 FROM ThuCung WHERE ID_ThuCung = p_ID_ThuCung) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Lỗi: Không tồn tại thú cưng';
+        END IF;
+
+        -- 6. Kiểm tra Loại Vắc xin
+        IF NOT EXISTS (SELECT 1 FROM Loai_Vacxin WHERE ID_LoaiVacxin = p_ID_LoaiVacxin) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Lỗi: Không có loại Vác-xin phù hợp';
+        END IF;
+
+        -- 7. Thực hiện INSERT (sử dụng giá trị từ tham số, cho phép NULL)
+        INSERT INTO DichVu_TiemPhong(
+            ID_HoaDon, ID_DichVu, ID_NhanVien, ID_ThuCung, ID_LoaiVacxin, 
+            NgayTiem, LieuLuong, GoiTiem, KhuyenMai
+        )
+        VALUES (
+            p_ID_HoaDon, p_ID_DichVu, p_ID_NhanVien, p_ID_ThuCung, p_ID_LoaiVacxin, 
+            p_NgayTiem, p_lieuLuong, p_GoiTiem, p_KhuyenMai
+        );
     END`,
 
     // 12. sp_DangKyGoiTiem
-    `CREATE PROCEDURE sp_DangKyGoiTiem(IN p_ID_HoaDon char(10), IN p_ID_DichVu char(10), IN p_ID_NhanVien char(10), IN p_ID_ThuCung char(10), IN p_ID_LoaiVacxin char(10), IN p_GoiTiem int)
+    `CREATE PROCEDURE sp_DangKyGoiTiem(
+        IN p_ID_HoaDon char(10),
+        IN p_ID_DichVu char(10),
+        IN p_ID_NhanVien char(10),
+        IN p_ID_ThuCung char(10),
+        IN p_ID_LoaiVacxin char(10),
+        IN p_GoiTiem int,
+        IN p_NgayTiem date
+    )
     BEGIN
+        DECLARE v_GiaTien float;
+        DECLARE v_DuplicateError CONDITION FOR SQLSTATE '23000';
+        DECLARE EXIT HANDLER FOR v_DuplicateError
+        BEGIN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Lỗi: Dịch vụ tiêm này đã tồn tại trong hóa đơn';
+        END;
+
+        -- BƯỚC 1: Kiểm tra Hóa đơn tồn tại
         IF NOT EXISTS (SELECT 1 FROM HoaDon WHERE ID_HoaDon = p_ID_HoaDon) THEN
             SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Không tìm thấy hóa đơn hợp lệ';
-        ELSE
-            UPDATE DichVu_TiemPhong
-            SET GoiTiem = COALESCE(p_GoiTiem, GoiTiem)
-            WHERE p_ID_HoaDon = ID_HoaDon AND p_ID_DichVu = ID_DichVu AND p_ID_NhanVien = ID_NhanVien 
-            AND p_ID_ThuCung = ID_ThuCung AND p_ID_LoaiVacxin = ID_LoaiVacxin;
         END IF;
+
+        -- BƯỚC 2: Kiểm tra Dịch vụ có trong Chi Nhánh không & Lấy giá
+        SELECT Gia_DichVu INTO v_GiaTien 
+        FROM ChiNhanh_DichVu 
+        WHERE ID_DichVuDuocDung = p_ID_DichVu
+        LIMIT 1;
+
+        IF v_GiaTien IS NULL THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Dịch vụ này không tồn tại ở chi nhánh';
+        END IF;
+
+        -- BƯỚC 3: Thêm mới dữ liệu
+        INSERT INTO DichVu_TiemPhong(
+            ID_HoaDon, ID_DichVu, ID_NhanVien, ID_ThuCung, ID_LoaiVacxin, 
+            NgayTiem, LieuLuong, GoiTiem, KhuyenMai
+        )
+        VALUES (
+            p_ID_HoaDon, p_ID_DichVu, p_ID_NhanVien, p_ID_ThuCung, p_ID_LoaiVacxin, 
+            p_NgayTiem, 1.0, p_GoiTiem, 0
+        );
     END`,
 
     // 13. sp_ThemDonMuaHang
