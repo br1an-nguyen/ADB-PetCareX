@@ -153,31 +153,52 @@ function ManagerDashboard() {
                                     <div style={{ width: '100%', height: 350 }}>
                                         <ResponsiveContainer>
                                             <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                                                <defs>
+                                                    <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="0%" stopColor="#8b5cf6" stopOpacity={1} />
+                                                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0.6} />
+                                                    </linearGradient>
+                                                </defs>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                                                 <XAxis
                                                     dataKey="name"
-                                                    tick={{ fill: '#94a3b8', fontSize: 12 }}
+                                                    tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 500 }}
                                                     angle={-45}
                                                     textAnchor="end"
                                                     height={60}
+                                                    axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                                                    tickLine={false}
                                                 />
                                                 <YAxis
-                                                    tick={{ fill: '#94a3b8', fontSize: 12 }}
+                                                    tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 500 }}
                                                     tickFormatter={formatShortCurrency}
+                                                    axisLine={false}
+                                                    tickLine={false}
                                                 />
                                                 <Tooltip
                                                     formatter={(value) => formatCurrency(value)}
-                                                    labelStyle={{ color: '#1e1b4b' }}
+                                                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                                                     contentStyle={{
-                                                        background: '#1e1b4b',
-                                                        border: '1px solid rgba(139, 92, 246, 0.3)',
-                                                        borderRadius: 8,
-                                                        color: '#fff'
+                                                        background: 'rgba(18, 18, 23, 0.9)',
+                                                        backdropFilter: 'blur(12px)',
+                                                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                        borderRadius: 12,
+                                                        boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+                                                        color: '#f8fafc',
+                                                        padding: '12px 16px'
                                                     }}
+                                                    itemStyle={{ color: '#fff' }}
+                                                    labelStyle={{ color: '#94a3b8', marginBottom: 4 }}
                                                 />
-                                                <Bar dataKey="revenue" name="Doanh thu" radius={[8, 8, 0, 0]}>
+                                                <Bar
+                                                    dataKey="revenue"
+                                                    name="Doanh thu"
+                                                    radius={[8, 8, 0, 0]}
+                                                    fill="url(#revenueGradient)"
+                                                    animationDuration={1500}
+                                                >
                                                     {chartData.map((entry, index) => (
-                                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                        <Cell key={`cell-${index}`} fill="url(#revenueGradient)" stroke="rgba(139, 92, 246, 0.5)" strokeWidth={1} />
                                                     ))}
                                                 </Bar>
                                             </BarChart>

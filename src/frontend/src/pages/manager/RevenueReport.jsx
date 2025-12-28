@@ -68,14 +68,16 @@ function RevenueReport() {
         if (active && payload && payload.length) {
             return (
                 <div style={{
-                    background: '#1e1b4b',
-                    border: '1px solid rgba(139, 92, 246, 0.3)',
-                    borderRadius: 8,
+                    background: 'rgba(18, 18, 23, 0.9)',
+                    backdropFilter: 'blur(12px)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: 12,
                     padding: '10px 14px',
-                    color: '#fff'
+                    color: '#f8fafc',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
                 }}>
                     <p style={{ margin: 0, fontWeight: 600 }}>{payload[0].name}</p>
-                    <p style={{ margin: '4px 0 0', color: '#a78bfa' }}>{formatCurrency(payload[0].value)}</p>
+                    <p style={{ margin: '4px 0 0', color: '#a78bfa', fontSize: '1.1em' }}>{formatCurrency(payload[0].value)}</p>
                 </div>
             )
         }
@@ -168,18 +170,26 @@ function RevenueReport() {
                                                     data={pieData}
                                                     cx="50%"
                                                     cy="50%"
-                                                    innerRadius={60}
+                                                    innerRadius={70}
                                                     outerRadius={100}
-                                                    paddingAngle={2}
+                                                    paddingAngle={4}
                                                     dataKey="value"
+                                                    stroke="none" // Remove white border
                                                 >
                                                     {pieData.map((entry, index) => (
-                                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="rgba(255,255,255,0.05)" strokeWidth={1} />
                                                     ))}
                                                 </Pie>
-                                                <Tooltip content={<CustomTooltip />} />
+                                                <Tooltip
+                                                    content={<CustomTooltip />}
+                                                    cursor={{ fill: 'transparent' }}
+                                                />
                                                 <Legend
-                                                    formatter={(value) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{value}</span>}
+                                                    layout="vertical"
+                                                    verticalAlign="middle"
+                                                    align="right"
+                                                    wrapperStyle={{ paddingLeft: '20px' }}
+                                                    formatter={(value) => <span style={{ color: '#94a3b8', fontSize: 13, fontWeight: 500 }}>{value}</span>}
                                                 />
                                             </PieChart>
                                         </ResponsiveContainer>
@@ -195,21 +205,49 @@ function RevenueReport() {
                                     <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>📊 Top 10 sản phẩm bán chạy</h3>
                                     <div style={{ width: '100%', height: 300 }}>
                                         <ResponsiveContainer>
-                                            <BarChart data={topProducts} layout="vertical" margin={{ left: 10, right: 20 }}>
-                                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                                                <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={formatShortCurrency} />
-                                                <YAxis dataKey="name" type="category" tick={{ fill: '#94a3b8', fontSize: 11 }} width={100} />
+                                            <BarChart data={topProducts} layout="vertical" margin={{ left: 10, right: 30, bottom: 20 }}>
+                                                <defs>
+                                                    <linearGradient id="productGradient" x1="0" y1="0" x2="1" y2="0">
+                                                        <stop offset="0%" stopColor="#a855f7" stopOpacity={0.8} />
+                                                        <stop offset="100%" stopColor="#ec4899" stopOpacity={1} />
+                                                    </linearGradient>
+                                                </defs>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
+                                                <XAxis
+                                                    type="number"
+                                                    tick={{ fill: '#94a3b8', fontSize: 11 }}
+                                                    tickFormatter={formatShortCurrency}
+                                                    axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                                                    tickLine={false}
+                                                />
+                                                <YAxis
+                                                    dataKey="name"
+                                                    type="category"
+                                                    tick={{ fill: '#f8fafc', fontSize: 12, fontWeight: 500 }}
+                                                    width={100}
+                                                    axisLine={false}
+                                                    tickLine={false}
+                                                />
                                                 <Tooltip
                                                     formatter={(value) => formatCurrency(value)}
                                                     labelFormatter={(label, payload) => payload[0]?.payload?.fullName || label}
+                                                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                                                     contentStyle={{
-                                                        background: '#1e1b4b',
-                                                        border: '1px solid rgba(139, 92, 246, 0.3)',
-                                                        borderRadius: 8,
-                                                        color: '#fff'
+                                                        background: 'rgba(18, 18, 23, 0.9)',
+                                                        backdropFilter: 'blur(12px)',
+                                                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                        borderRadius: 12,
+                                                        boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+                                                        color: '#f8fafc'
                                                     }}
                                                 />
-                                                <Bar dataKey="revenue" name="Doanh thu" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                                                <Bar
+                                                    dataKey="revenue"
+                                                    name="Doanh thu"
+                                                    fill="url(#productGradient)"
+                                                    radius={[0, 4, 4, 0]}
+                                                    barSize={24}
+                                                />
                                             </BarChart>
                                         </ResponsiveContainer>
                                     </div>

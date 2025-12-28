@@ -192,118 +192,139 @@ function DoctorPerformance() {
                         </div>
                     ) : (
                         <>
-                            {/* Horizontal Bar Chart - Xếp hạng */}
-                            <div className="card" style={{ marginBottom: 'var(--spacing-xl)' }}>
-                                <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>📊 Xếp hạng theo doanh thu</h3>
-                                <div style={{ width: '100%', height: Math.max(300, chartData.length * 50) }}>
-                                    <ResponsiveContainer>
-                                        <BarChart data={chartData} layout="vertical" margin={{ left: 20, right: 80, top: 10, bottom: 10 }}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" horizontal={false} />
-                                            <XAxis
-                                                type="number"
-                                                tick={{ fill: '#94a3b8', fontSize: 12 }}
-                                                tickFormatter={formatShortCurrency}
-                                            />
-                                            <YAxis
-                                                dataKey="name"
-                                                type="category"
-                                                tick={{ fill: '#94a3b8', fontSize: 12 }}
-                                                width={100}
-                                            />
-                                            <Tooltip
-                                                formatter={(value, name) => [formatCurrency(value), 'Doanh thu']}
-                                                labelFormatter={(label, payload) => {
-                                                    const data = payload[0]?.payload
-                                                    return data ? `${data.fullName} - ${data.cases} ca khám` : label
-                                                }}
-                                                contentStyle={{
-                                                    background: '#1e1b4b',
-                                                    border: '1px solid rgba(139, 92, 246, 0.3)',
-                                                    borderRadius: 8,
-                                                    color: '#fff'
-                                                }}
-                                            />
-                                            <Bar dataKey="revenue" name="Doanh thu" radius={[0, 8, 8, 0]}>
-                                                {chartData.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                                ))}
-                                                <LabelList
-                                                    dataKey="cases"
-                                                    position="right"
-                                                    formatter={(val) => `${val} ca`}
-                                                    style={{ fill: '#94a3b8', fontSize: 11 }}
+                            {/* Grid Layout for Chart and Table */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-xl)', alignItems: 'start' }}>
+                                {/* Horizontal Bar Chart - Xếp hạng */}
+                                <div className="card">
+                                    <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>📊 Xếp hạng theo doanh thu</h3>
+                                    <div style={{ width: '100%', height: Math.max(300, chartData.length * 60) }}>
+                                        <ResponsiveContainer>
+                                            <BarChart data={chartData} layout="vertical" margin={{ left: 20, right: 80, top: 10, bottom: 10 }}>
+                                                <defs>
+                                                    <linearGradient id="doctorGradient" x1="0" y1="0" x2="1" y2="0">
+                                                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.8} />
+                                                        <stop offset="100%" stopColor="#8b5cf6" stopOpacity={1} />
+                                                    </linearGradient>
+                                                </defs>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
+                                                <XAxis
+                                                    type="number"
+                                                    tick={{ fill: '#94a3b8', fontSize: 12 }}
+                                                    tickFormatter={formatShortCurrency}
+                                                    axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                                                    tickLine={false}
                                                 />
-                                            </Bar>
-                                        </BarChart>
-                                    </ResponsiveContainer>
+                                                <YAxis
+                                                    dataKey="name"
+                                                    type="category"
+                                                    tick={{ fill: '#f8fafc', fontSize: 13, fontWeight: 500 }}
+                                                    width={120}
+                                                    axisLine={false}
+                                                    tickLine={false}
+                                                />
+                                                <Tooltip
+                                                    formatter={(value, name) => [formatCurrency(value), 'Doanh thu']}
+                                                    labelFormatter={(label, payload) => {
+                                                        const data = payload[0]?.payload
+                                                        return data ? `${data.fullName} - ${data.cases} ca khám` : label
+                                                    }}
+                                                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                                                    contentStyle={{
+                                                        background: 'rgba(18, 18, 23, 0.9)',
+                                                        backdropFilter: 'blur(12px)',
+                                                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                        borderRadius: 12,
+                                                        boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+                                                        color: '#f8fafc',
+                                                        padding: '12px 16px'
+                                                    }}
+                                                />
+                                                <Bar
+                                                    dataKey="revenue"
+                                                    name="Doanh thu"
+                                                    fill="url(#doctorGradient)"
+                                                    radius={[0, 6, 6, 0]}
+                                                    barSize={32}
+                                                >
+                                                    <LabelList
+                                                        dataKey="cases"
+                                                        position="right"
+                                                        formatter={(val) => `${val} ca`}
+                                                        style={{ fill: '#94a3b8', fontSize: 12, fontWeight: 500 }}
+                                                    />
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
                                 </div>
-                            </div>
 
-                            {/* Table View */}
-                            <div className="card">
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-lg)' }}>
-                                    <h3>📋 Bảng chi tiết</h3>
-                                    {doctors.length > 0 && (
-                                        <button
-                                            className="btn btn-primary"
-                                            onClick={() => openSalaryModal(doctors[0])}
-                                            style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}
-                                        >
-                                            🎁 Tăng lương 10% cho Top 1
-                                        </button>
-                                    )}
-                                </div>
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th>Hạng</th>
-                                            <th>Bác sĩ</th>
-                                            <th>Chi nhánh</th>
-                                            <th>Số ca khám</th>
-                                            <th>Doanh thu</th>
-                                            <th>Thao tác</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {doctors.map((doctor, idx) => {
-                                            const rank = getRankBadge(idx)
-                                            return (
-                                                <tr key={doctor.ID_NhanVien} style={idx === 0 ? { background: 'rgba(139, 92, 246, 0.1)' } : {}}>
-                                                    <td>
-                                                        {rank ? (
-                                                            <span style={{
-                                                                display: 'inline-block',
-                                                                padding: '0.25rem 0.5rem',
-                                                                background: rank.color + '20',
-                                                                borderRadius: 'var(--radius-sm)',
-                                                                fontWeight: 600
-                                                            }}>
-                                                                {rank.emoji} {rank.label}
-                                                            </span>
-                                                        ) : (
-                                                            <span style={{ color: 'var(--text-muted)' }}>#{idx + 1}</span>
-                                                        )}
-                                                    </td>
-                                                    <td><strong>{doctor.HoTen}</strong></td>
-                                                    <td>{doctor.Ten_ChiNhanh}</td>
-                                                    <td>{doctor.SoCaKham}</td>
-                                                    <td>
-                                                        <strong className="gradient-text">{formatCurrency(doctor.DoanhThuKhamBenh)}</strong>
-                                                    </td>
-                                                    <td>
-                                                        <button
-                                                            className="btn btn-secondary"
-                                                            onClick={() => openSalaryModal(doctor)}
-                                                            style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem' }}
-                                                        >
-                                                            💰 Điều chỉnh
-                                                        </button>
-                                                    </td>
+                                {/* Table View */}
+                                <div className="card">
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-lg)' }}>
+                                        <h3>📋 Bảng chi tiết</h3>
+                                        {doctors.length > 0 && (
+                                            <button
+                                                className="btn btn-primary"
+                                                onClick={() => openSalaryModal(doctors[0])}
+                                                style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}
+                                            >
+                                                🎁 Tăng lương Top 1
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div style={{ overflowX: 'auto' }}>
+                                        <table style={{ minWidth: '100%' }}>
+                                            <thead>
+                                                <tr>
+                                                    <th>Hạng</th>
+                                                    <th>Bác sĩ</th>
+                                                    <th>Số ca</th>
+                                                    <th>Doanh thu</th>
+                                                    <th>Thao tác</th>
                                                 </tr>
-                                            )
-                                        })}
-                                    </tbody>
-                                </table>
+                                            </thead>
+                                            <tbody>
+                                                {doctors.map((doctor, idx) => {
+                                                    const rank = getRankBadge(idx)
+                                                    return (
+                                                        <tr key={doctor.ID_NhanVien} style={idx === 0 ? { background: 'rgba(139, 92, 246, 0.1)' } : {}}>
+                                                            <td>
+                                                                {rank ? (
+                                                                    <span style={{
+                                                                        display: 'inline-block',
+                                                                        padding: '0.2rem 0.4rem',
+                                                                        background: rank.color + '20',
+                                                                        borderRadius: 'var(--radius-sm)',
+                                                                        fontSize: '0.8rem',
+                                                                        fontWeight: 600
+                                                                    }}>
+                                                                        {rank.emoji} {rank.label}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span style={{ color: 'var(--text-muted)' }}>#{idx + 1}</span>
+                                                                )}
+                                                            </td>
+                                                            <td><strong>{doctor.HoTen}</strong></td>
+                                                            <td>{doctor.SoCaKham}</td>
+                                                            <td>
+                                                                <strong className="gradient-text">{formatCurrency(doctor.DoanhThuKhamBenh)}</strong>
+                                                            </td>
+                                                            <td>
+                                                                <button
+                                                                    className="btn btn-secondary"
+                                                                    onClick={() => openSalaryModal(doctor)}
+                                                                    style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                                                                >
+                                                                    💰
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    )
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         </>
                     )}
