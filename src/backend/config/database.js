@@ -87,19 +87,8 @@ const profiledQuery = async (sql, params = []) => {
         const endTime = performance.now();
         const duration = (endTime - startTime).toFixed(2);
 
-        // Xác định màu dựa trên thời gian
-        let timeColor = LOG_COLORS.green;
-        let timeIcon = '✅';
-        if (duration > SLOW_QUERY_THRESHOLD) {
-            timeColor = LOG_COLORS.red;
-            timeIcon = '🐢 SLOW!';
-        } else if (duration > SLOW_QUERY_THRESHOLD / 2) {
-            timeColor = LOG_COLORS.yellow;
-            timeIcon = '⚠️';
-        }
-
         const rowCount = Array.isArray(result[0]) ? result[0].length : 0;
-        console.log(`${timeColor}   ${timeIcon} ${duration}ms | ${rowCount} rows${LOG_COLORS.reset}`);
+        console.log(`${LOG_COLORS.green}   ⏱️ ${duration}ms | ${rowCount} rows${LOG_COLORS.reset}`);
 
         return result;
 
@@ -177,7 +166,6 @@ pool.getConnection((err, connection) => {
     }
     console.log('✅ Kết nối database thành công!');
     console.log(`📊 Query Profiler: ${ENABLE_QUERY_PROFILER ? 'ENABLED' : 'DISABLED'}`);
-    console.log(`⏱️  Slow query threshold: ${SLOW_QUERY_THRESHOLD}ms`);
     connection.release();
 });
 
