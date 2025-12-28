@@ -278,7 +278,7 @@ const sqlCommands = [
         END IF;
     END`,
 
-    // 14. sp_TinhLaiTongTien (Đã có, update lại logic cho chắc chắn)
+    // 14. sp_TinhLaiTongTien 
     `CREATE PROCEDURE sp_TinhLaiTongTien(IN p_ID_HoaDon CHAR(10))
      BEGIN
         DECLARE v_TongTienMoi FLOAT DEFAULT 0;
@@ -293,7 +293,7 @@ const sqlCommands = [
         UPDATE HoaDon SET TongTien = v_TongTienMoi WHERE ID_HoaDon = p_ID_HoaDon;
      END`,
 
-    // 15. sp_DieuChuyenNhanSu (Chuyển DATEADD thành DATE_SUB)
+    // 15. sp_DieuChuyenNhanSu 
     `CREATE PROCEDURE sp_DieuChuyenNhanSu(IN p_ID_NhanVien char(10), IN p_ID_ChiNhanhMoi char(10))
     BEGIN
         DECLARE v_ID_ChiNhanhCu char(10);
@@ -319,7 +319,7 @@ const sqlCommands = [
         END IF;
     END`,
 
-    // 16. sp_GuiDanhGia (Thay MERGE bằng INSERT ... ON DUPLICATE KEY UPDATE)
+    // 16. sp_GuiDanhGia 
     `CREATE PROCEDURE sp_GuiDanhGia(IN p_ID_TaiKhoan char(10), IN p_ID_ChiNhanh char(10), IN p_DiemDichVu int, IN p_NhanXetNhanVien varchar(50), IN p_MucDoHaiLong varchar(50), IN p_BinhLuan varchar(100))
     BEGIN
         IF p_DiemDichVu < 1 OR p_DiemDichVu > 5 THEN
