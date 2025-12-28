@@ -702,54 +702,84 @@ END;
 GO
 
 CREATE PROCEDURE sp_ThemPhieuTiemPhong
-	@ID_HoaDon char(10),
-	@ID_DichVu char(10),
-	@ID_NhanVien char(10),
-	@ID_ThuCung char(10),
-	@ID_LoaiVacxin char(10),
-	@NgayTiem date,
-	@lieuLuong float,
-	@GoiTiem int = NULL,
-	@KhuyenMai int = NULL
+    @ID_HoaDon char(10),
+    @ID_DichVu char(10),
+    @ID_NhanVien char(10),
+    @ID_ThuCung char(10),
+    @ID_LoaiVacxin char(10),
+    @NgayTiem date,
+    @lieuLuong float,
+    @GoiTiem int = NULL,     -- Cho phép NULL nếu tiêm lẻ
+    @KhuyenMai int = NULL    -- Cho phép NULL
 AS
 BEGIN
-	SET NOCOUNT ON;
+    SET NOCOUNT ON;
 
-	IF NOT EXISTS (SELECT 1 FROM HoaDon WHERE ID_HoaDon = @ID_HoaDon)
-	BEGIN
-		RAISERROR ('Không tìm thấy hóa đơn hợp lệ', 16, 1);
-		RETURN -1;
-	END;
+    -- 1. Kiểm tra Hóa Đơn
+    IF NOT EXISTS (SELECT 1 FROM HoaDon WHERE ID_HoaDon = @ID_HoaDon)
+    BEGIN
+        RAISERROR (N'Lỗi: Không tìm thấy hóa đơn hợp lệ', 16, 1);
+        RETURN -1;
+    END;
 
-	IF NOT EXISTS (SELECT 1 FROM ChiNhanh_DichVu WHERE ID_DichVuDuocDung = @ID_DichVu)
-	BEGIN
-		RAISERROR ('Không có dịch vụ phù hợp', 16, 1);
-		RETURN -1;
-	END;
+    -- 2. Kiểm tra Dịch vụ tại chi nhánh
+    IF NOT EXISTS (SELECT 1 FROM ChiNhanh_DichVu WHERE ID_DichVuDuocDung = @ID_DichVu)
+    BEGIN
+        RAISERROR (N'Lỗi: Không có dịch vụ phù hợp tại chi nhánh', 16, 1);
+        RETURN -1;
+    END;
 
-	IF NOT EXISTS (SELECT 1 FROM DichVu dv JOIN ChiNhanh_DichVu cn_dv ON dv.ID_DichVu = cn_dv.ID_DichVu
-					WHERE dv.Ten_DichVu = N'Tiêm Phòng' AND cn_dv.ID_DichVuDuocDung = @ID_DichVu)
-	BEGIN
-		RAISERROR ('Dịch vụ được chọn không phải dịch vụ tiêm phòng', 16, 1);
-		RETURN -1;
-	END;
+    -- 3. Kiểm tra Nhân viên (ĐÃ THÊM MỚI)
+    IF NOT EXISTS (SELECT 1 FROM NhanVien WHERE ID_NhanVien = @ID_NhanVien)
+    BEGIN
+        RAISERROR (N'Lỗi: Không tìm thấy nhân viên', 16, 1);
+        RETURN -1;
+    END;
 
-	IF NOT EXISTS (SELECT 1 FROM ThuCung WHERE ID_ThuCung = @ID_ThuCung)
-	BEGIN
-		RAISERROR ('Không tồn tại thú cưng', 16, 1);
-		RETURN -1;
-	END;
+    -- 4. Kiểm tra đúng là dịch vụ Tiêm Phòng không
+    -- Lưu ý: Đảm bảo Ten_DichVu trong DB chính xác từng ký tự là 'Tiêm Phòng'
+    IF NOT EXISTS (SELECT 1 FROM DichVu dv 
+                   JOIN ChiNhanh_DichVu cn_dv ON dv.ID_DichVu = cn_dv.ID_DichVu
+                   WHERE dv.Ten_DichVu = N'Tiêm Phòng' 
+                   AND cn_dv.ID_DichVuDuocDung = @ID_DichVu)
+    BEGIN
+        RAISERROR (N'Lỗi: Dịch vụ được chọn không phải loại Tiêm Phòng', 16, 1);
+        RETURN -1;
+    END;
 
-	IF NOT EXISTS (SELECT 1 FROM Loai_Vacxin WHERE ID_LoaiVacxin = @ID_LoaiVacxin )
-	BEGIN
-		RAISERROR ('Không có loại Vác-xin phù hợp', 16, 1);
-		RETURN -1;
-	END;
+    -- 5. Kiểm tra Thú Cưng
+    IF NOT EXISTS (SELECT 1 FROM ThuCung WHERE ID_ThuCung = @ID_ThuCung)
+    BEGIN
+        RAISERROR (N'Lỗi: Không tồn tại thú cưng', 16, 1);
+        RETURN -1;
+    END;
 
-	INSERT INTO DichVu_TiemPhong(ID_HoaDon, ID_DichVu, ID_NhanVien, ID_ThuCung, ID_LoaiVacxin, NgayTiem, LieuLuong, GoiTiem, KhuyenMai)
-	VALUES (@ID_HoaDon, @ID_DichVu, @ID_NhanVien, @ID_ThuCung, @ID_LoaiVacxin, @NgayTiem, @lieuLuong, NULL, NULL)
+    -- 6. Kiểm tra Loại Vắc xin
+    IF NOT EXISTS (SELECT 1 FROM Loai_Vacxin WHERE ID_LoaiVacxin = @ID_LoaiVacxin )
+    BEGIN
+        RAISERROR (N'Lỗi: Không có loại Vác-xin phù hợp', 16, 1);
+        RETURN -1;
+    END;
 
-	RETURN 0;
+    -- 7. Thực hiện INSERT (ĐÃ SỬA LỖI NULL)
+    BEGIN TRY
+        INSERT INTO DichVu_TiemPhong(
+            ID_HoaDon, ID_DichVu, ID_NhanVien, ID_ThuCung, ID_LoaiVacxin, 
+            NgayTiem, LieuLuong, GoiTiem, KhuyenMai
+        )
+        VALUES (
+            @ID_HoaDon, @ID_DichVu, @ID_NhanVien, @ID_ThuCung, @ID_LoaiVacxin, 
+            @NgayTiem, @lieuLuong, @GoiTiem, @KhuyenMai -- Đã thay thế NULL bằng biến
+        );
+    END TRY
+    BEGIN CATCH
+        -- Bắt lỗi trùng lặp (Primary Key) hoặc lỗi hệ thống khác
+        DECLARE @ErrMsg nvarchar(4000) = ERROR_MESSAGE();
+        RAISERROR (@ErrMsg, 16, 1);
+        RETURN -1;
+    END CATCH
+
+    RETURN 0;
 END;
 GO
 
