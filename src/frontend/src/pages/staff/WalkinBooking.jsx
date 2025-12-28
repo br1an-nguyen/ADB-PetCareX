@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import NotificationToast from '../../components/common/NotificationToast'
 
 const API_URL = 'http://localhost:5000/api'
 
@@ -37,6 +38,26 @@ function WalkinBooking() {
         NgaySinh: '',
         TinhTrangSucKhoe: 'Bình thường'
     })
+
+    // Modal tạo khách hàng
+    const [showCustomerModal, setShowCustomerModal] = useState(false)
+    const [creatingCustomer, setCreatingCustomer] = useState(false)
+    const [customerForm, setCustomerForm] = useState({
+        HoTen: '',
+        Phone: '',
+        Email: '',
+        CCCD: '',
+        GioiTinh: 'Nam',
+        NgaySinh: ''
+    })
+
+    // UI Notification state
+    const [notification, setNotification] = useState({ show: false, message: '', type: 'success' })
+
+    // Helper function to show notification
+    const showNotification = (message, type = 'success') => {
+        setNotification({ show: true, message, type })
+    }
 
     // Load branches on mount
     useEffect(() => {
@@ -195,7 +216,7 @@ function WalkinBooking() {
 
     const handleCreatePet = async () => {
         if (!petForm.TenThuCung || !petForm.TenLoai || !petForm.TenGiong) {
-            alert('Vui lòng điền đầy đủ thông tin bắt buộc')
+            showNotification('Vui lòng điền đầy đủ thông tin bắt buộc', 'error')
             return
         }
 
@@ -216,11 +237,11 @@ function WalkinBooking() {
                 // Reload pets list
                 await loadPets(selectedCustomer.ID_TaiKhoan)
             } else {
-                alert(data.message || 'Có lỗi xảy ra')
+                showNotification(data.message || 'Có lỗi xảy ra', 'error')
             }
         } catch (err) {
             console.error('Create pet error:', err)
-            alert('Không thể kết nối server')
+            showNotification('Không thể kết nối server', 'error')
         } finally {
             setCreatingPet(false)
         }
@@ -237,7 +258,7 @@ function WalkinBooking() {
                 body: JSON.stringify({
                     ID_ThuCung: selectedPet.ID_ThuCung,
                     ID_DichVuGoc: selectedService.ID_DichVu,
-                    ID_NhanVien: 'NV00000008'
+                    ID_NhanVien: 'NV00000008' // TODO: Get from auth context
                 })
             })
 
@@ -248,10 +269,63 @@ function WalkinBooking() {
             } else {
                 setError(data.message || 'Có lỗi xảy ra')
             }
-        } catch (err) {
+        } catch {
             setError('Không thể kết nối server')
         } finally {
             setSubmitting(false)
+        }
+    }
+
+    const handleCreateCustomer = async () => {
+        if (!customerForm.HoTen || !customerForm.Phone) {
+            showNotification('Vui lòng điền Họ tên và Số điện thoại', 'error')
+            return
+        }
+
+        setCreatingCustomer(true)
+        try {
+            // 1. Tạo khách hàng
+            const res = await fetch(`${API_URL}/staff/register-customer`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(customerForm)
+            })
+            const data = await res.json()
+
+            if (data.success) {
+                setShowCustomerModal(false)
+                showNotification('Đăng ký khách hàng thành công!', 'success')
+
+                // 2. Tìm kiếm lại khách hàng vừa tạo để chọn
+                // Vì API register không trả về ID khách mới (tùy implementation), 
+                // ta search lại bằng Phone để lấy ID
+                setSearchQuery(customerForm.Phone)
+                setLoading(true)
+                const searchRes = await fetch(`${API_URL}/staff/lookup?query=${encodeURIComponent(customerForm.Phone)}`)
+                const searchData = await searchRes.json()
+
+                if (searchData.success && searchData.data.length > 0) {
+                    // Tìm đúng khách hàng vừa tạo (ưu tiên khớp chính xác SĐT)
+                    const newCustomerRaw = searchData.data.find(c => c.Phone === customerForm.Phone) || searchData.data[0]
+
+                    const newCustomer = {
+                        ID_TaiKhoan: newCustomerRaw.ID_TaiKhoan,
+                        HoTen: newCustomerRaw.TenChu || newCustomerRaw.HoTen, // API lookup return field names vary
+                        Phone: newCustomerRaw.Phone,
+                        TenCapDo: newCustomerRaw.TenCapDo || 'Cơ bản'
+                    }
+
+                    selectCustomer(newCustomer)
+                }
+            } else {
+                showNotification(data.message || 'Có lỗi xảy ra', 'error')
+            }
+        } catch (err) {
+            console.error('Create customer error:', err)
+            showNotification('Không thể kết nối server', 'error')
+        } finally {
+            setCreatingCustomer(false)
+            setLoading(false)
         }
     }
 
@@ -400,6 +474,22 @@ function WalkinBooking() {
                                     disabled={loading}
                                 >
                                     {loading ? '⏳' : '🔍'} Tìm kiếm
+                                </button>
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={() => {
+                                        setCustomerForm({
+                                            HoTen: '',
+                                            Phone: searchQuery, // Pre-fill phone if searched
+                                            Email: '',
+                                            CCCD: '',
+                                            GioiTinh: 'Nam',
+                                            NgaySinh: ''
+                                        })
+                                        setShowCustomerModal(true)
+                                    }}
+                                >
+                                    ➕ Khách mới
                                 </button>
                             </div>
 
@@ -673,6 +763,103 @@ function WalkinBooking() {
                     </div>
                 </div>
             )}
+
+            {/* Modal Tạo Khách Hàng */}
+            {showCustomerModal && (
+                <div className="modal-overlay" onClick={() => setShowCustomerModal(false)}>
+                    <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+                        <div className="modal-header">
+                            <h2>👤 Đăng ký khách hàng mới</h2>
+                            <button className="modal-close" onClick={() => setShowCustomerModal(false)}>×</button>
+                        </div>
+                        <div className="modal-body">
+                            <div className="form-group">
+                                <label>Họ và tên *</label>
+                                <input
+                                    type="text"
+                                    placeholder="Nguyễn Văn A"
+                                    value={customerForm.HoTen}
+                                    onChange={e => setCustomerForm({ ...customerForm, HoTen: e.target.value })}
+                                />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
+                                <div className="form-group">
+                                    <label>Số điện thoại *</label>
+                                    <input
+                                        type="text"
+                                        placeholder="0912345678"
+                                        value={customerForm.Phone}
+                                        onChange={e => setCustomerForm({ ...customerForm, Phone: e.target.value })}
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label>CCCD / CMND</label>
+                                    <input
+                                        type="text"
+                                        value={customerForm.CCCD}
+                                        onChange={e => setCustomerForm({ ...customerForm, CCCD: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label>Email</label>
+                                <input
+                                    type="email"
+                                    placeholder="example@email.com"
+                                    value={customerForm.Email}
+                                    onChange={e => setCustomerForm({ ...customerForm, Email: e.target.value })}
+                                />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
+                                <div className="form-group">
+                                    <label>Giới tính</label>
+                                    <select
+                                        value={customerForm.GioiTinh}
+                                        onChange={e => setCustomerForm({ ...customerForm, GioiTinh: e.target.value })}
+                                    >
+                                        <option value="Nam">Nam</option>
+                                        <option value="Nữ">Nữ</option>
+                                        <option value="Khác">Khác</option>
+                                    </select>
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Ngày sinh</label>
+                                    <input
+                                        type="date"
+                                        value={customerForm.NgaySinh}
+                                        onChange={e => setCustomerForm({ ...customerForm, NgaySinh: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn btn-ghost" onClick={() => setShowCustomerModal(false)}>
+                                Hủy
+                            </button>
+                            <button
+                                className="btn btn-primary"
+                                onClick={handleCreateCustomer}
+                                disabled={creatingCustomer || !customerForm.HoTen || !customerForm.Phone}
+                            >
+                                {creatingCustomer ? '⏳ Đang đăng ký...' : '✅ Đăng ký ngay'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Notification Toast */}
+            <NotificationToast
+                show={notification.show}
+                message={notification.message}
+                type={notification.type}
+                onClose={() => setNotification(prev => ({ ...prev, show: false }))}
+            />
         </div>
     )
 }
