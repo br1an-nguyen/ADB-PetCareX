@@ -754,28 +754,54 @@ END;
 GO
 
 CREATE PROCEDURE sp_DangKyGoiTiem
-	@ID_HoaDon char(10),
-	@ID_DichVu char(10),
-	@ID_NhanVien char(10),
-	@ID_ThuCung char(10),
-	@ID_LoaiVacxin char(10),
-	@GoiTiem int
+    @ID_HoaDon char(10),
+    @ID_DichVu char(10), -- Mã dịch vụ trong bảng ChiNhanh_DichVu
+    @ID_NhanVien char(10),
+    @ID_ThuCung char(10),
+    @ID_LoaiVacxin char(10),
+    @GoiTiem int, -- Số gói (lần tiêm)
+    @NgayTiem date
 AS
 BEGIN
-	SET NOCOUNT ON;
+    SET NOCOUNT ON;
+    DECLARE @GiaTien float;
 
-	IF NOT EXISTS (SELECT 1 FROM HoaDon WHERE ID_HoaDon = @ID_HoaDon)
-	BEGIN
-		RAISERROR ('Không tìm thấy hóa đơn hợp lệ', 16, 1);
-		RETURN -1;
-	END;
+    -- BƯỚC 1: Kiểm tra Hóa đơn tồn tại (Lookup 1)
+    IF NOT EXISTS (SELECT 1 FROM HoaDon WHERE ID_HoaDon = @ID_HoaDon)
+    BEGIN
+        RAISERROR (N'Không tìm thấy hóa đơn hợp lệ', 16, 1);
+        RETURN -1;
+    END;
 
-	UPDATE DichVu_TiemPhong
-	SET GoiTiem = COALESCE(@GoiTiem, GoiTiem)
-	WHERE @ID_HoaDon = ID_HoaDon AND @ID_DichVu = ID_DichVu AND @ID_NhanVien = ID_NhanVien 
-	AND @ID_ThuCung = ID_ThuCung AND @ID_LoaiVacxin = ID_LoaiVacxin
+    -- BƯỚC 2: Kiểm tra Dịch vụ có trong Chi Nhánh không & Lấy giá (Lookup 2)
+    -- Giả sử lấy giá từ bảng giá niêm yết
+    SELECT @GiaTien = Gia_DichVu 
+    FROM ChiNhanh_DichVu 
+    WHERE ID_DichVuDuocDung = @ID_DichVu;
 
-	RETURN 0;
+    IF @GiaTien IS NULL
+    BEGIN
+        RAISERROR (N'Dịch vụ này không tồn tại ở chi nhánh', 16, 1);
+        RETURN -1;
+    END;
+
+    -- BƯỚC 3: Thêm mới dữ liệu (Write)
+    BEGIN TRY
+        INSERT INTO DichVu_TiemPhong(
+            ID_HoaDon, ID_DichVu, ID_NhanVien, ID_ThuCung, ID_LoaiVacxin, 
+            NgayTiem, LieuLuong, GoiTiem, KhuyenMai
+        )
+        VALUES (
+            @ID_HoaDon, @ID_DichVu, @ID_NhanVien, @ID_ThuCung, @ID_LoaiVacxin, 
+            @NgayTiem, 1.0, @GoiTiem, 0
+        );
+    END TRY
+    BEGIN CATCH
+        RAISERROR (N'Lỗi: Dịch vụ tiêm này đã tồn tại trong hóa đơn', 16, 1);
+        RETURN -1;
+    END CATCH
+
+    RETURN 0;
 END;
 GO
 
