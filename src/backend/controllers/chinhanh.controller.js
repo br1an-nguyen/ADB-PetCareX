@@ -1,24 +1,24 @@
 const db = require('../config/database');
 
-// Lấy danh sách chi nhánh (có phân trang)
+// Lấy danh sách chi nhánh
 exports.getAllChiNhanh = async (req, res) => {
     try {
         // Lấy tham số phân trang từ query string
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 20;
         const offset = (page - 1) * limit;
-        
+
         // Query đếm tổng số - Profiler tự động log
         const countQuery = `SELECT COUNT(*) as total FROM ChiNhanh`;
         const [[{ total }]] = await db.executeQuery(countQuery, [], 'ChiNhanh.count');
-        
+
         // Query lấy dữ liệu với phân trang
         const [rows] = await db.executeQuery(
             'SELECT ID_ChiNhanh, Ten_ChiNhanh, SDT, DiaChi_ChiNhanh, GioMoCua, GioDongCua FROM ChiNhanh ORDER BY ID_ChiNhanh LIMIT ? OFFSET ?',
             [limit, offset],
             'ChiNhanh.list'
         );
-        
+
         res.json({
             success: true,
             data: rows,
@@ -55,14 +55,14 @@ exports.getChiNhanhById = async (req, res) => {
             WHERE ID_ChiNhanh = ?
         `;
         const [rows] = await db.executeQuery(query, [id], 'ChiNhanh.detail');
-        
+
         if (rows.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: 'Không tìm thấy chi nhánh'
             });
         }
-        
+
         res.json({
             success: true,
             data: rows[0]

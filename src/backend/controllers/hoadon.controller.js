@@ -1,6 +1,6 @@
 const db = require('../config/database');
 
-// Lấy danh sách hóa đơn (có phân trang)
+// Lấy danh sách hóa đơn
 exports.getAllHoaDon = async (req, res) => {
     try {
         // Lấy tham số phân trang từ query string

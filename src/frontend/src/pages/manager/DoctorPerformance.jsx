@@ -223,7 +223,7 @@ function DoctorPerformance() {
                                                     tickLine={false}
                                                 />
                                                 <Tooltip
-                                                    formatter={(value, name) => [formatCurrency(value), 'Doanh thu']}
+                                                    formatter={(value) => [formatCurrency(value), 'Doanh thu']}
                                                     labelFormatter={(label, payload) => {
                                                         const data = payload[0]?.payload
                                                         return data ? `${data.fullName} - ${data.cases} ca khám` : label
